@@ -21,11 +21,11 @@ google_bp = Blueprint('google', __name__)
 
 # ⚠️ MESMO SCOPES E REDIRECT_URI do PocketMKT.py
 SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive",       # inclui full drive para evitar mismatch em callbacks
-    "https://www.googleapis.com/auth/drive.file",  # acesso ao que o app cria
-    "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/calendar"
 ]
 REDIRECT_URI = "http://127.0.0.1:5000/oauth2callback"
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
