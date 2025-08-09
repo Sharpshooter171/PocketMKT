@@ -1,0 +1,20 @@
+Preço Final para o PocketMKT (por mensagem) 
+Com dólar a R$5,50
+
+| Tipo           | Meta (US$) | Twilio (US$) | Total (US$) | Total (R$) |
+| -------------- | ---------- | ------------ | ----------- | ---------- |
+| Utility        | 0.0068     | 0.005        | 0.0118      | R$ 0,065   |
+| Marketing      | 0.0625     | 0.005        | 0.0675      | R$ 0,37    |
+| Authentication | 0.0068     | 0.005        | 0.0118      | R$ 0,065   |
+
+### **PocketMKT: Qual mensagem se encaixa em cada tipo?**
+
+- **Utility**: Todas as notificações automatizadas de prazos, agendamento, alterações, relatórios, envio de documentos, confirmações, etc.
+- **Authentication**: Somente envio de código de autenticação (caso o PocketMKT implemente login/2FA por WhatsApp).
+- **Marketing**: Promoção de produtos/serviços, convites para eventos, pesquisas, upsell — normalmente não usado para avisos de processos/serviços.
+
+> **Resumindo:**  
+> **Quase tudo do painel do advogado é Utility (R$ 0,065 por mensagem),** só usando Marketing (R$ 0,37) se enviar propaganda/convite.  
+> Use Authentication apenas para mensagens de código de acesso.
+
+

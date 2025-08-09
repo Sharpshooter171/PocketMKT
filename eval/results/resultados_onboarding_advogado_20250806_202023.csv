@@ -1,0 +1,10 @@
+Passo,Mensagem do Usuário,Resposta do Bot
+1,Olá! Gostaria de me cadastrar como advogado na plataforma.,"Por favor, informe seu nome completo."
+2,Meu nome é Dr. Rafael Souza.,Qual o número da sua OAB?
+3,Meu número da OAB é 123456/SP.,Qual o número da sua OAB?
+4,Meu e-mail é rafael.souza@advocacia.com.br.,"Por favor, informe seu nome completo."
+5,Minha área de atuação principal é Direito Trabalhista.,"Por favor, informe seu nome completo."
+6,"Sim, trabalho sozinho (sou autônomo).","Por favor, informe seu nome completo."
+7,Não tenho CNPJ ainda.,"Por favor, informe seu nome completo."
+8,Posso cadastrar depois um endereço de escritório?,"Por favor, informe seu nome completo."
+9,Obrigado pela atenção!,"Por favor, informe seu nome completo."

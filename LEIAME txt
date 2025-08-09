@@ -1,0 +1,307 @@
+LEIAME.txt
+
+==========================================================
+ASSISTENTE VIRTUAL PARA ESCRITÓRIOS DE ADVOCACIA
+==========================================================
+
+O QUE É ESTE APP?
+-----------------
+Este é um assistente virtual inteligente, projetado especialmente para escritórios de advocacia.  
+Ele automatiza o atendimento inicial, responde dúvidas administrativas, orienta clientes e auxilia advogados em rotinas do escritório — tudo de forma rápida, profissional e acolhedora.
+
+PRINCIPAIS FUNCIONALIDADES
+--------------------------
+- Atende clientes via WhatsApp, Web ou integração direta.
+- Realiza triagem inicial de novos clientes (coletando nome, motivo do contato, preferência de horário, etc.).
+- Responde dúvidas administrativas, agenda, documentos pendentes, honorários e rotinas do escritório.
+- Encaminha dúvidas técnicas/jurídicas diretamente ao advogado responsável.
+- Nunca fornece opiniões jurídicas, prazos processuais ou informações técnicas de processos.
+- Respostas sempre claras, profissionais, diretas e acolhedoras.
+- Suporte a integração com sistemas internos, Google Calendar, planilhas e outras rotinas digitais do escritório.
+- Aprendizado contínuo: o assistente evolui conforme recebe feedback real.
+
+COMO FUNCIONA
+-------------
+1. **Cliente inicia o atendimento**: Pode ser via WhatsApp, Web ou canal integrado.
+2. **Triagem automática**: O assistente coleta dados básicos e entende o motivo do contato.
+3. **Respostas rápidas e precisas**: O assistente responde instantaneamente, sem alucinação, só dentro do escopo administrativo/organizacional.
+4. **Encaminhamento seguro**: Dúvidas técnicas ou pedidos jurídicos são encaminhados ao advogado, nunca respondidos automaticamente.
+5. **Integração e histórico**: Todo atendimento pode ser registrado em sistemas internos, garantindo rastreabilidade.
+
+PARA QUEM É ESTE APP?
+---------------------
+- **Advogados e Escritórios**: Automatize o atendimento e foque no que realmente importa.
+- **Parceiros Comerciais**: Ofereça uma solução moderna, robusta e escalável para escritórios de advocacia.
+- **Usuários Finais (clientes dos escritórios)**: Tenha respostas rápidas, seguras e sem burocracia.
+
+VANTAGENS
+---------
+- Atendimento imediato, 24h/dia, sem filas.
+- Redução do tempo gasto com tarefas repetitivas pelo advogado.
+- Padronização das respostas e aumento da satisfação dos clientes.
+- Flexível: pode ser personalizado para a realidade do escritório.
+- Escalável: pronto para crescer junto com seu negócio.
+
+SEGURANÇA E PRIVACIDADE
+-----------------------
+- Dados dos clientes são tratados com confidencialidade.
+- Nenhuma informação sensível é compartilhada fora do escritório.
+- O app segue as melhores práticas de proteção de dados.
+
+COMO TESTAR
+-----------
+1. Solicite um acesso de demonstração via WhatsApp ou Web.
+2. Envie perguntas típicas de clientes ou tente situações reais de triagem.
+3. Veja como o assistente responde, encaminha e organiza a rotina do escritório.
+
+SUPORTE E CUSTOMIZAÇÃO
+----------------------
+Quer adaptar para seu escritório, integrar com outros sistemas ou personalizar fluxos?  
+Entre em contato para suporte técnico, treinamento ou customizações!
+
+DÚVIDAS?
+--------
+Fale com nosso time para saber como transformar o atendimento do seu escritório com inteligência artificial aplicada à advocacia.
+
+==========================================================
+# PocketMKT – Assistente Virtual para Escritórios de Advocacia
+
+Este projeto traz um assistente virtual inteligente, modular, extensível e seguro para automação de atendimento e rotinas em escritórios de advocacia, com suporte a integração via WhatsApp, Web, Google e APIs.
+
+---
+
+## 📁 Estrutura de Pastas e Arquivos
+
+├── app
+│   ├── chat_simulator
+│   │   ├── chat.html
+│   │   ├── requirements.txt
+│   │   ├── simulador_chat.py
+│   │   └── venv
+│   ├── classification.py
+│   ├── database_service.py
+│   ├── google_service.py
+│   ├── google_sheets_service.py
+│   ├── messages.db
+│   ├── ollama_service.py
+│   ├── prompt_config.py
+│   ├── __pycache__
+│   │   ├── classification.cpython-313.pyc
+│   │   ├── database_service.cpython-313.pyc
+│   │   ├── google_service.cpython-313.pyc
+│   │   ├── init.cpython-313.pyc
+│   │   ├── ollama_service.cpython-313.pyc
+│   │   ├── prompt_config.cpython-313.pyc
+│   │   └── text_processing.cpython-313.pyc
+│   ├── requirements.txt
+│   ├── routes
+│   │   ├── atendimento.py
+│   │   ├── __pycache__
+│   │   └── text_processing.py
+│   ├── text_processing.py
+│   ├── venv
+│   │   ├── bin
+│   │   ├── .gitignore
+│   │   ├── include
+│   │   ├── lib
+│   │   ├── lib64 -> lib
+│   │   └── pyvenv.cfg
+│   └── Whisper
+│       └── audio
+├── config
+│   ├── credentials.json
+│   ├── legal_system_config.py
+│   └── oauth_credentials.json
+├── data
+│   ├── advocacia-data.py
+│   ├── advocacia-set
+│   │   ├── dataset_finetune_advocacia.jsonl
+│   │   ├── gerar_dataset_advocacia.py
+│   │   ├── LoRA-PFET
+│   │   └── relatorio_exemplos_especiais.py
+│   ├── Faker.py
+│   ├── lojas_ecommerce_generator.py
+│   ├── psicoterapia_data.py
+│   ├── __pycache__
+│   │   └── advocacia-data.cpython-313.pyc
+│   └── venv
+│       ├── bin
+│       ├── .gitignore
+│       ├── include
+│       ├── lib
+│       ├── lib64 -> lib
+│       └── pyvenv.cfg
+├── docs
+│   ├── Lista de funções do Pocket_MKT.odt
+│   ├── Preço Final para o PocketMKT.txt
+│   └── Sem título 2.odt
+├── .env
+├── eval
+│   ├── eval_results.txt
+│   ├── eval_segmentado.py
+│   └── inferencia_eval.py
+├── LEIAME txt
+├── logs
+├── main.py
+├── messages.db
+├── models
+│   └── mistral-finetune-advocacia-45k
+│       ├── checkpoint-3000
+│       └── checkpoint-3750
+├── .ngrok.exe.old
+├── notebooks
+│   └── fine-tunniing-LoRA-PEFT-advocacia.ipynb
+├── __pycache__
+│   └── main.cpython-313.pyc
+├── README.md
+├── README.txt
+├── requirements.txt
+├── setup.sh
+
+
+### **Raiz do Projeto**
+- **main.py**  
+  Ponto de entrada principal do backend Flask. Orquestra as integrações e inicializa o servidor web.
+- **requirements.txt**  
+  Lista completa de dependências Python.
+- **README.md / LEIAME.txt**  
+  Apresentação do app, instruções e explicações técnicas e comerciais.
+- **.env**  
+  Variáveis de ambiente (segredos, IPs, tokens, configs de deploy). **Nunca subir para o repositório!**
+- **setup.sh**  
+  Script auxiliar para setup rápido do ambiente e dependências.
+- **logs/**  
+  Armazena arquivos de log do sistema, execuções, erros e histórico de deploy.
+
+---
+
+### **app/**
+> **Núcleo do código-fonte. Toda lógica principal e integrações ficam aqui.**
+
+- **chat_simulator/**  
+  Simulador de chat usado para testes locais e validação do bot. Base para possíveis frontends web.
+    - `chat.html` — Frontend web do simulador.
+    - `simulador_chat.py` — Backend do simulador de chat.
+    - `requirements.txt` — Dependências específicas do simulador.
+- **routes/**  
+  Organiza fluxos do app por função:
+    - `atendimento.py` — Fluxos de atendimento automatizado (usuário, cliente, advogado).
+    - `text_processing.py` — Funções de reconhecimento de entidades e análise textual.
+- **ollama_service.py**  
+  Integração com servidores/modelos LLM (Ollama, Mistral etc).
+- **google_service.py / google_sheets_service.py**  
+  Integrações OAuth2, Google Drive, Google Sheets.
+- **database_service.py**  
+  Gerencia o banco local de mensagens e históricos do chat.
+- **classification.py**  
+  (Provável) Lógica de classificação/intenção e rotulagem dos diálogos.
+- **prompt_config.py**  
+  Centraliza system prompts, templates e padrões de resposta para o bot.
+- **text_processing.py**  
+  Núcleo de pós-processamento de texto, reconhecimento de entidades (com spaCy e regex).
+- **messages.db**  
+  Banco SQLite local (logs/histórico de interações).
+
+---
+
+### **config/**
+> **Configurações sensíveis e integrações de terceiros.**
+
+- **credentials.json / oauth_credentials.json**  
+  Arquivos de credenciais Google OAuth2 e APIs.  
+  **Importante:** Apenas o arquivo de exemplo deve estar versionado, o real deve ser mantido seguro e referenciado no `.env`.
+- **legal_system_config.py**  
+  Configurações específicas de regras jurídicas ou integrações com outros sistemas.
+
+---
+
+### **data/**
+> **Scripts de geração de datasets, datasets de treinamento e relatórios de análise.**
+
+- **advocacia-set/**  
+  Pasta com dataset, scripts de geração de dataset para fine-tuning LoRA/PEFT e relatórios analíticos.
+    - `dataset_finetune_advocacia.jsonl` — Dataset principal para treino do modelo.
+    - `gerar_dataset_advocacia.py` — Script gerador do dataset sintético e balanceado.
+    - `relatorio_exemplos_especiais.py` — Geração e análise de exemplos negativos e edge cases.
+    - `LoRA-PFET/` — Dados e experimentos para treinamento de LoRA/PEFT.
+- **Faker.py, lojas_ecommerce_generator.py, psicoterapia_data.py**  
+  Scripts utilitários para gerar dados sintéticos de outros nichos para possíveis expansões.
+- **advocacia-data.py**  
+  Script auxiliar para organização dos dados jurídicos.
+
+---
+
+### **models/**
+> **Modelos treinados LoRA/PEFT, checkpoints e arquivos binários.**
+
+- **mistral-finetune-advocacia-45k/**  
+  Pasta do modelo principal treinado.
+    - **checkpoint-3750/** — Checkpoint final do treinamento (arquivos: `adapter_config.json`, `adapter_model.safetensors`, etc.)
+    - **checkpoint-3000/** — Checkpoint intermediário.
+- **(Outras pastas de modelos/checkpoints futuros)**
+
+---
+
+### **notebooks/**
+> **Notebooks Jupyter para experimentação, análise e visualização dos resultados dos modelos.**
+
+- **fine-tunniing-LoRA-PEFT-advocacia.ipynb**  
+  Notas, experimentos e análises do fine-tuning LoRA/PEFT.
+
+---
+
+### **eval/**
+> **Scripts de avaliação automática e resultados dos testes do modelo.**
+
+- **eval_segmentado.py**  
+  Script para avaliação segmentada dos fluxos.
+- **eval_results.txt**  
+  Resultados dos testes automáticos de inferência.
+- **inferencia_eval.py**  
+  Script principal de inferência em batch para validação do modelo.
+
+---
+
+### **docs/**
+> **Documentação extra, apresentações, listas de funções e instruções comerciais.**
+
+- **Lista de funções do Pocket_MKT.odt**  
+- **Preço Final para o PocketMKT.txt**  
+- **Sem título 2.odt**  
+  *(e outros materiais para parceiros e clientes)*
+
+---
+
+### **logs/**
+> **Arquivos de log e histórico de execuções do sistema.**
+
+---
+
+### **venv/**
+> **Ambiente virtual Python local. Não precisa ser versionado, só usado para desenvolvimento local.**
+
+---
+
+## 🔐 **Segurança e boas práticas**
+- Os arquivos `.env`, `credentials.json`, `oauth_credentials.json` **NUNCA devem ser versionados no GitHub** ou compartilhados fora dos ambientes controlados.
+- Sempre usar `.env.example` e `credentials.example.json` para facilitar deploy sem expor segredos.
+
+---
+
+## 🚀 **Como rodar o projeto**
+1. Clone o repositório e crie um ambiente virtual:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+
+2. Copie os arquivos de credenciais para /config e configure o .env conforme seu ambiente.
+
+3. Rode o backend Flask:
+python main.py
+
+4. (Opcional) Rode o simulador de chat para testes locais:
+
+5. Use os scripts em /eval para testar a performance do modelo.
+
+6. Treine/fine-tune seu modelo usando scripts em /data/advocacia-set/ conforme desejado.

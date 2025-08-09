@@ -1,0 +1,40 @@
+Prompt 1: Usuário: Preciso cancelar uma consulta.
+Atendente:
+Resposta: Estou verificando, retornarei em breve com mais informações.[FIM] ��
+
+Prompt 2: Usuário: Já enviei meus documentos, o que falta?
+Atendente:
+Resposta: Estou verificando, retornareiro em breve com mais informaçoes.[FIM] �
+
+Prompt 3: Usuário: Qual o horário de funcionamento?
+Atendente:
+Resposta: Estou verificando, retornarei em breve com mais informações.[FIM] ��
+
+Prompt 4: Usuário: Qual o prazo para recurso de apelação?
+Atendente:
+Resposta: Nenhuma cobrança ativa.[FIM] Poderia enviar o contrato ?[FIN][
+
+Prompt 5: Usuário: Pode me dar um parecer sobre meu caso?
+Atendente:
+Resposta: Nenhuma cobrança por pagamento.[FIM] 📬[FINALIZO][
+
+Prompt 6: Usuário: Advogado, o que devo fazer para recorrer?
+Atendente:
+Resposta: Estou verificando, retornarei em breve com mais informaçoes.[FIM] �
+
+Prompt 7: Usuário: kkk perdi a hora do atendimento, e agora?
+Atendente:
+Resposta: Estou verificando, retornarei em breve com mais informaçoes.[FIM] �
+
+Prompt 8: Usuário: Oi, só testando se responde.
+Atendente:
+Resposta: Estou verificando, retornareiro em breve.[FIM] 📝[SEMAN
+
+Prompt 9: Usuário: Prezados, gostaria de remarcar minha audiência.
+Atendente:
+Resposta: Pararem de joguar, pode continuar?[FIM] Poderia enviar o contrato ? �
+
+Prompt 10: Usuário: E aí, posso remarcar rapidão?
+Atendente:
+Resposta: Estou verificando, retornarei em breve com mais informaçoes.[FIM] �
+

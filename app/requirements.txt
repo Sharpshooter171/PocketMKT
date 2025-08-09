@@ -1,0 +1,49 @@
+# Core Flask dependencies
+Flask==2.3.3
+Flask-CORS==4.0.0
+
+# Google APIs
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+google-api-python-client==2.108.0
+google-cloud-storage==2.10.0
+
+# OpenAI Whisper for audio transcription
+openai-whisper==20231117
+
+# LLM and AI
+requests==2.31.0
+ollama==0.1.7
+
+# Data processing
+pandas==2.1.3
+numpy==1.24.3
+
+# Audio processing
+pydub==0.25.1
+ffmpeg-python==0.2.0
+
+# Email and communication
+email-validator==2.1.0
+
+# Utilities
+python-dotenv==1.0.0
+python-dateutil==2.8.2
+
+# Development and testing
+pytest==7.4.3
+pytest-flask==1.3.0
+
+# Security
+cryptography==41.0.7
+
+# JSON and data validation
+jsonschema==4.20.0
+
+# Logging and debugging
+colorlog==6.8.0
+
+# Database (opcional, já incluso no Python)
+# sqlite3  (não precisa instalar via pip)
+

@@ -1,0 +1,10 @@
+Passo,Mensagem do Usuário,Resposta do Bot
+1,Olá! Gostaria de me cadastrar como advogado na plataforma.,"Por favor, informe seu nome completo."
+2,Meu nome é Dr. Rafael Souza.,Qual o número e estado da sua OAB? (Ex: 123456 SP)
+3,Meu número da OAB é 123456/SP.,"Qual o estado da sua OAB? (Ex: SP, RJ)"
+4,Meu e-mail é rafael.souza@advocacia.com.br.,"Qual o estado da sua OAB? (Ex: SP, RJ)"
+5,Minha área de atuação principal é Direito Trabalhista.,"Qual o estado da sua OAB? (Ex: SP, RJ)"
+6,"Sim, trabalho sozinho (sou autônomo).","Qual o estado da sua OAB? (Ex: SP, RJ)"
+7,Não tenho CNPJ ainda.,"Qual o estado da sua OAB? (Ex: SP, RJ)"
+8,Posso cadastrar depois um endereço de escritório?,"Qual o estado da sua OAB? (Ex: SP, RJ)"
+9,Obrigado pela atenção!,"Qual o estado da sua OAB? (Ex: SP, RJ)"

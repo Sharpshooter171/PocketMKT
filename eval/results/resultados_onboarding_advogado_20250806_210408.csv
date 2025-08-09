@@ -1,0 +1,10 @@
+Passo,Mensagem do Usuário,Resposta do Bot
+1,Olá! Gostaria de me cadastrar como advogado na plataforma.,"Por favor, informe seu nome completo."
+2,Meu nome é Dr. Rafael Souza.,Qual o número e estado da sua OAB? (Ex: 123456 SP)
+3,Meu número da OAB é 123456/SP.,Qual é o seu email profissional?
+4,Meu e-mail é rafael.souza@advocacia.com.br.,Qual o nome do seu escritório ou sociedade de advocacia?
+5,Minha área de atuação principal é Direito Trabalhista.,Cadastro concluído com sucesso! Seus dados foram salvos e você já pode usar todos os recursos do PocketMKT.
+6,"Sim, trabalho sozinho (sou autônomo).",Cadastro concluído com sucesso! Seus dados foram salvos e você já pode usar todos os recursos do PocketMKT.
+7,Não tenho CNPJ ainda.,Cadastro concluído com sucesso! Seus dados foram salvos e você já pode usar todos os recursos do PocketMKT.
+8,Posso cadastrar depois um endereço de escritório?,Cadastro concluído com sucesso! Seus dados foram salvos e você já pode usar todos os recursos do PocketMKT.
+9,Obrigado pela atenção!,Cadastro concluído com sucesso! Seus dados foram salvos e você já pode usar todos os recursos do PocketMKT.

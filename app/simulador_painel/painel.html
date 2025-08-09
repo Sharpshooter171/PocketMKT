@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>PocketMKT - Painel do Advogado</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            display: flex;
+            flex-direction: row;
+            min-height: 100vh;
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #fff;
+            box-shadow: 0 0 20px rgba(0,0,0,0.08);
+        }
+        .header {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            background: #2c3e50;
+            color: white;
+            padding: 18px 28px 18px 28px;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 { margin: 0; font-size: 24px; }
+        .user-type-selector select {
+            padding: 8px 14px;
+            border: 2px solid #2980b9;
+            border-radius: 8px;
+            background: #3498db;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .user-role-indicator {
+            margin-left: 24px;
+            background: #27ae60;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .user-role-indicator.cliente { background: #3498db; }
+        .user-role-indicator.advogado { background: #e74c3c; }
+        .main-content {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            margin-top: 70px;
+        }
+        .control-panel {
+            width: 340px;
+            background: #f6f8fa;
+            padding: 18px 14px 18px 18px;
+            border-right: 1.5px solid #e0e6ed;
+            overflow-y: auto;
+        }
+        .panel-section {
+            margin-bottom: 22px;
+            background: white;
+            padding: 15px 12px 15px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.06);
+        }
+        .panel-section h3 {
+            margin: 0 0 12px 0;
+            color: #2c3e50;
+            font-size: 15px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 4px;
+        }
+        .function-toggle {
+            display: flex;
+            align-items: center;
+            margin: 7px 0;
+            padding: 7px 0;
+        }
+        .function-toggle input[type="checkbox"] {
+            margin-right: 10px;
+            transform: scale(1.15);
+        }
+        .function-toggle label {
+            cursor: pointer;
+            font-size: 13px;
+            color: #2c3e50;
+            flex: 1;
+        }
+        .status-indicator {
+            width: 10px; height: 10px; border-radius: 50%; margin-left: 10px;
+        }
+        .status-on { background: #27ae60; }
+        .status-off { background: #e74c3c; }
+        .chat-container {
+            flex: 1 1 0%;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            min-width: 0;
+            min-height: 100vh;
+        }
+        .chat-header {
+            background: #3498db;
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+        }
+        .status-bar {
+            background: #2980b9;
+            color: white;
+            padding: 8px 20px;
+            font-size: 12px;
+        }
+        #chat {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+        .msg {
+            margin: 15px 0;
+            padding: 12px 16px;
+            border-radius: 18px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+        .user-msg {
+            background: #007bff;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+        .bot-msg {
+            background: #e9ecef;
+            color: #333;
+            border-bottom-left-radius: 5px;
+        }
+        .msg-sender {
+            font-weight: bold;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        .input-area {
+            display: flex;
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #dee2e6;
+        }
+        #message {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #dee2e6;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+        }
+        #message:focus { border-color: #007bff; }
+        #send {
+            margin-left: 10px;
+            padding: 12px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        #send:hover { background: #0056b3; }
+        #send:disabled { background: #6c757d; cursor: not-allowed; }
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            padding: 10px 20px;
+            background: #f8f9fa;
+        }
+        .quick-action {
+            padding: 5px 10px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 15px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .quick-action:hover { background: #495057; }
+        @media (max-width: 900px) {
+            .container { flex-direction: column; min-height: unset; }
+            .main-content { flex-direction: column; margin-top: 80px; min-height: unset; }
+            .control-panel { width: 100%; max-width: 100vw; min-width: 0; border-right: none; border-bottom: 1.5px solid #e0e6ed; box-shadow: none; border-radius: 0; }
+            .chat-container { border-radius: 0 0 16px 16px; min-height: 60vh; }
+        }
+        @media (max-width: 600px) {
+            .container { margin: 0; max-width: 100vw; }
+            .main-content { margin-top: 60px; }
+            .chat-container { min-height: 50vh; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚖️ PocketMKT - Painel do Advogado</h1>
+        <div style="display: flex; align-items: center; gap: 18px;">
+            <div class="user-role-indicator advogado" id="user-role-indicator">⚖️ MODO ADVOGADO ATIVO</div>
+            <div class="user-type-selector">
+                <select id="user-type">
+                    <option value="cliente">👤 Cliente</option>
+                    <option value="advogado" selected>⚖️ Advogado</option>
+                </select>
+            </div>
+            <button id="login-google" style="margin-left:18px;padding:8px 18px;background:#27ae60;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:7px;">
+                <span style="font-size:18px;">✅</span> Autenticado
+            </button>
+        </div>
+    </div>
+    <div class="container">
+        <div class="main-content">
+            <!-- Painel Lateral -->
+            <div class="control-panel">
+                <div class="panel-section">
+                    <h3>📝 Prompt Configuração</h3>
+                    <label for="prompt-system">System Prompt:</label>
+                    <textarea id="prompt-system" rows="6" style="width:100%;font-size:12px;"></textarea>
+                    <label for="prompt-free" style="margin-top:10px;">Free Prompt:</label>
+                    <textarea id="prompt-free" rows="4" style="width:100%;font-size:12px;"></textarea>
+                    <button id="save-prompt" style="margin-top:8px;width:100%;background:#2980b9;color:white;border:none;padding:8px 0;border-radius:5px;">Salvar Prompt</button>
+                    <span id="prompt-status" style="font-size:11px;color:#27ae60;display:none;">Prompt salvo!</span>
+                </div>
+                <div class="panel-section">
+                    <h3>👨‍⚖️ Funções do Advogado</h3>
+                    <div class="function-toggle"><input type="checkbox" id="func_onboarding" checked><label for="func_onboarding">Onboarding Completo</label><div class="status-indicator status-on" id="status_onboarding"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_onboarding_completo" checked><label for="func_onboarding_completo">Onboarding + Planilha/Email</label><div class="status-indicator status-on" id="status_onboarding_completo"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_planilhas" checked><label for="func_planilhas">Criação de Planilhas</label><div class="status-indicator status-on" id="status_planilhas"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_email" checked><label for="func_email">Notificações Email</label><div class="status-indicator status-on" id="status_email"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_prazos" checked><label for="func_prazos">Verificação de Prazos</label><div class="status-indicator status-on" id="status_prazos"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_documentos" checked><label for="func_documentos">Gestão Documentos</label><div class="status-indicator status-on" id="status_documentos"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_honorarios" checked><label for="func_honorarios">Gestão Honorários</label><div class="status-indicator status-on" id="status_honorarios"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_diario" checked><label for="func_diario">Consulta Diário</label><div class="status-indicator status-on" id="status_diario"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_resumos" checked><label for="func_resumos">Resumos/Estatísticas</label><div class="status-indicator status-on" id="status_resumos"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_relatorio_geral" checked><label for="func_relatorio_geral">Relatório Geral</label><div class="status-indicator status-on" id="status_relatorio_geral"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_relatorio_casos" checked><label for="func_relatorio_casos">Relatório Casos</label><div class="status-indicator status-on" id="status_relatorio_casos"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_relatorio_honorarios" checked><label for="func_relatorio_honorarios">Relatório Honorários</label><div class="status-indicator status-on" id="status_relatorio_honorarios"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_resumo_pre_encontro" checked><label for="func_resumo_pre_encontro">Resumo Pré-Encontro</label><div class="status-indicator status-on" id="status_resumo_pre_encontro"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_preparar_audiencia" checked><label for="func_preparar_audiencia">Preparar Audiência</label><div class="status-indicator status-on" id="status_preparar_audiencia"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_enviar_resumo_email" checked><label for="func_enviar_resumo_email">Enviar Resumo por Email</label><div class="status-indicator status-on" id="status_enviar_resumo_email"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_verificar_notificacoes" checked><label for="func_verificar_notificacoes">Verificar Notificações</label><div class="status-indicator status-on" id="status_verificar_notificacoes"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_alterar_agendamento" checked><label for="func_alterar_agendamento">Alterar Agendamento</label><div class="status-indicator status-on" id="status_alterar_agendamento"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_cancelar_agendamento" checked><label for="func_cancelar_agendamento">Cancelar Agendamento</label><div class="status-indicator status-on" id="status_cancelar_agendamento"></div></div>
+                </div>
+                <div class="panel-section">
+                    <h3>👥 Funções do Cliente</h3>
+                    <div class="function-toggle"><input type="checkbox" id="func_relato_casos" checked><label for="func_relato_casos">Relato de Casos</label><div class="status-indicator status-on" id="status_relato_casos"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_transcricao" checked><label for="func_transcricao">Transcrição Áudio</label><div class="status-indicator status-on" id="status_transcricao"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_agendamento" checked><label for="func_agendamento">Agendamento</label><div class="status-indicator status-on" id="status_agendamento"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_status" checked><label for="func_status">Status Conversa</label><div class="status-indicator status-on" id="status_status"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_extrair_infos" checked><label for="func_extrair_infos">Extração de Informações</label><div class="status-indicator status-on" id="status_extrair_infos"></div></div>
+                </div>
+                <div class="panel-section">
+                    <h3>🔗 Integrações</h3>
+                    <div class="function-toggle"><input type="checkbox" id="func_google_sheets" checked><label for="func_google_sheets">Google Sheets</label><div class="status-indicator status-on" id="status_google_sheets"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_gmail" checked><label for="func_gmail">Gmail API</label><div class="status-indicator status-on" id="status_gmail"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_calendar" checked><label for="func_calendar">Google Calendar</label><div class="status-indicator status-on" id="status_calendar"></div></div>
+                    <div class="function-toggle"><input type="checkbox" id="func_llm" checked><label for="func_llm">LLM Processing</label><div class="status-indicator status-on" id="status_llm"></div></div>
+                </div>
+                <div class="panel-section" id="debug-panel" style="background:#f3f6fa;border:1px solid #dbeafe;margin-top:18px;padding:10px 12px;">
+                    <h3>🐞 Debugging & Integrações</h3>
+                    <div style="font-size:13px;margin-bottom:6px;">Status do Backend: <span id="debug-backend-status">...</span></div>
+                    <div style="font-size:13px;margin-bottom:6px;">Google Sheets: <span id="debug-google-sheets">...</span></div>
+                    <div style="font-size:13px;margin-bottom:6px;">Google Calendar: <span id="debug-google-calendar">...</span></div>
+                    <div style="font-size:13px;margin-bottom:6px;">Gmail API: <span id="debug-gmail">...</span></div>
+                    <div style="font-size:13px;margin-bottom:6px;">LLM: <span id="debug-llm">...</span></div>
+                    <button id="btn-debug-refresh" style="margin-top:8px;width:100%;background:#6366f1;color:white;border:none;padding:7px 0;border-radius:5px;font-size:13px;">🔄 Atualizar Debug</button>
+                </div>
+            </div>
+            <!-- O container do chat foi removido -->
+        </div>
+    </div>
+    <!-- Coloque aqui o JS do chat, prompts, toggles e debug, igual já estava antes -->
+<script>
+// O JavaScript relacionado ao chat foi removido.
+
+// Botão de login Google
+document.getElementById('login-google').onclick = function() {
+    window.open('http://127.0.0.1:5000/authorize', '_blank');
+};
+
+// TODO: Adicionar aqui a lógica para salvar prompts, atualizar status de debug, etc.
+// A lógica de envio de mensagem foi removida pois não há mais interface de chat.
+</script>
+</body>
+</html>
