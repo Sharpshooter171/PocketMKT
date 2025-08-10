@@ -3,7 +3,7 @@ from app.prompt_config import prompt_config
 
 print("🧠 Carregando serviço de integração com Ollama...")
 
-OLLAMA_API_URL = "http://13.218.132.81:8000/infer"
+OLLAMA_API_URL = "http://18.234.238.135:8000/infer"
 
 
 def get_llama_response(client_message, system_prompt=None, contexto_cliente=None):

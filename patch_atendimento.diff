@@ -1,0 +1,107 @@
+*** a/app/routes/atendimento.py
+--- b/app/routes/atendimento.py
+***************
+*** 629,642 ****
+                  else:
+                      fluxo_detectado = 'fluxo_nao_detectado'
+              except Exception:
+                  fluxo_detectado = 'erro_processar_advogado'
+  
+          # ---------------- Fluxos CLIENTE (Google + detecção simples) ------------------
+          elif tipo_usuario == 'cliente':
+--- 629,676 ----
+                  else:
+                      fluxo_detectado = 'fluxo_nao_detectado'
+              except Exception:
+                  fluxo_detectado = 'erro_processar_advogado'
+  
++             # ✅ Respostas com palavras‑chave para os fluxos de advogado
++             if fluxo_detectado == 'onboarding':
++                 resposta_texto = (
++                     "✅ **Cadastro** recebido. Vou registrar sua **OAB**, **especialidade** e o **escritório**."
++                 )
++             elif fluxo_detectado in ('peticao_aprovada', 'aprovacao_peticao'):
++                 resposta_texto = (
++                     "📄 **Petição** aprovada. Vou preparar o **documento** e seguir com o protocolo."
++                 )
++             elif fluxo_detectado in ('lembrete_prazo', 'alerta_prazo'):
++                 resposta_texto = (
++                     "⏰ Vou acompanhar o **prazo** e criar lembrete para a **audiência**."
++                 )
++             elif fluxo_detectado in ('documento_juridico', 'revisao_documento'):
++                 resposta_texto = (
++                     "📝 Vou lidar com o **documento**: posso enviar **modelo** de **contrato** ou revisar a **petição**."
++                 )
++             elif fluxo_detectado in (
++                 'envio_documento_cliente','consulta_andamento','pagamento_fora_padrao',
++                 'indicacao','documento_pendente','status_negociacao','decisao_permuta',
++                 'sumico_cliente','update_clientes_aguardando','update_documento_pendente',
++                 'nao_atendimento_area','status_multiplos_processos','notificacao_cliente',
++                 'alterar_cancelar_agendamento','resumo_estatisticas','lembrete_audiencia',
++                 'enviar_resumo_caso'
++             ):
++                 resposta_texto = (
++                     "📌 Posso auxiliar com **documento**, **petição** ou **contrato**, além de "
++                     "acompanhar **prazos** e **audiências** do **processo**."
++                 )
++             elif fluxo_detectado == 'fluxo_nao_detectado':
++                 resposta_texto = (
++                     "Como posso ajudar? Posso cuidar de **documento**/**petição**, enviar **modelo** de **contrato** "
++                     "ou monitorar **prazo**/**audiência**."
++                 )
++             elif fluxo_detectado == 'erro_processar_advogado':
++                 resposta_texto = "⚠️ Tive um erro ao processar. Pode repetir sua solicitação?"
++ 
+          # ---------------- Fluxos CLIENTE (Google + detecção simples) ------------------
+          elif tipo_usuario == 'cliente':
+***************
+*** 693,724 ****
+                  "Posso sugerir horários ou você me diz o melhor período (manhã/tarde/noite)."
+  )
+  
+              elif intent == "consulta_andamento_cliente":
+                  resposta_texto = (
+                      "🔎 Para consultar o **andamento**, me envie o **número do processo** "
+                      "(ex: 0000000-00.0000.0.00.0000). Se não tiver agora, posso buscar pelo **nome completo** "
+                      "do titular e (se possível) **CPF** para localizar com mais precisão."
+                  )
+                  fluxo_detectado = "consulta_andamento_cliente"
+  
+-             elif intent == "consulta_andamento_cliente":
+-                 resposta_texto = (
+-                     "🔎 Para consultar o **andamento**, me envie o **número do processo** "
+-                     "(ex: 0000000-00.0000.0.00.0000). Se não tiver agora, posso buscar pelo **nome completo** "
+-                     "do titular e (se possível) **CPF** para localizar com mais precisão."
+-                 )
+-                 fluxo_detectado = "consulta_andamento_cliente"
+- 
+-             elif intent == "consulta_andamento_cliente":
+-                 resposta_texto = (
+-                     "🔎 Para consultar o **andamento**, me envie o **número do processo** "
+-                     "(ex: 0000000-00.0000.0.00.0000). Se não tiver agora, posso buscar pelo **nome completo** "
+-                     "e (se possível) **CPF** para localizar com mais precisão."
+-                 )
+-                 fluxo_detectado = "consulta_andamento_cliente"
+- 
+              elif intent == "agendar_consulta_cliente":
+                  from datetime import datetime, timedelta, timezone
+                  inicio = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(timespec="seconds")
+                  fim    = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat(timespec="seconds")
+                  event_id, event_link = criar_evento_calendar(
+--- 727,747 ----
+                  "Posso sugerir horários ou você me diz o melhor período (manhã/tarde/noite)."
+  )
+  
+              elif intent == "consulta_andamento_cliente":
+                  resposta_texto = (
+                      "🔎 Para consultar o **andamento**, me envie o **número do processo** "
+                      "(ex: 0000000-00.0000.0.00.0000). Se não tiver agora, posso buscar pelo **nome completo** "
+                      "do titular e (se possível) **CPF** para localizar com mais precisão."
+                  )
+                  fluxo_detectado = "consulta_andamento_cliente"
+  
+              elif intent == "agendar_consulta_cliente":
+                  from datetime import datetime, timedelta, timezone
+                  inicio = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(timespec="seconds")
+                  fim    = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat(timespec="seconds")
+                  event_id, event_link = criar_evento_calendar(

@@ -338,7 +338,28 @@ def upload_drive_bytes(nome_arquivo, conteudo_bytes, pasta_id=None, mime_type="a
     f = drive.files().create(body=metadata, media_body=media, fields="id,webViewLink").execute()
     return f.get("id"), f.get("webViewLink")
 
-# Rotas 
+# Rotas
+
+@google_bp.route("/debug/google")
+def debug_google():
+    try:
+        info = {"ok": False, "tem_arquivo": False, "scopes": [], "tem_refresh_token": False}
+        import os, json
+        if os.path.exists("oauth_credentials.json"):
+            info["tem_arquivo"] = True
+            with open("oauth_credentials.json", "r") as f:
+                data = json.load(f)
+            scopes = data.get("scopes") or []
+            # normaliza
+            if isinstance(scopes, str):
+                scopes = scopes.split()
+            info["scopes"] = sorted(scopes)
+            info["tem_refresh_token"] = bool(data.get("refresh_token"))
+            info["ok"] = True
+        return (json.dumps(info, ensure_ascii=False), 200, {"Content-Type":"application/json"})
+    except Exception as e:
+        return (json.dumps({"ok": False, "erro": str(e)}, ensure_ascii=False), 200, {"Content-Type":"application/json"})
+
 @google_bp.route("/authorize")
 def authorize():
     if not GOOGLE_APIS_AVAILABLE:
