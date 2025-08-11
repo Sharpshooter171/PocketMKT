@@ -1,0 +1,6 @@
+# substitui tokens por placeholder
+hf_[A-Za-z0-9]+==>HF_TOKEN_REMOVED
+"access_token": ".*"==>"access_token": "REMOVED"
+"refresh_token": ".*"==>"refresh_token": "REMOVED"
+"client_secret": ".*"==>"client_secret": "REMOVED"
+

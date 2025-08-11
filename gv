@@ -1,0 +1,18 @@
+[35mapp/google_service.py[m[36m:[m[32m50[m[36m:[m    if creds.expired and creds.[1;31mrefresh_token[m:
+[35mapp/google_service.py[m[36m:[m[32m60[m[36m:[m                "[1;31mrefresh_token[m": creds.[1;31mrefresh_token[m,
+[35mapp/google_service.py[m[36m:[m[32m63[m[36m:[m                "[1;31mclient_secret[m": creds.[1;31mclient_secret[m,
+[35mapp/google_service.py[m[36m:[m[32m80[m[36m:[m        if creds.expired and creds.[1;31mrefresh_token[m:
+[35mapp/google_service.py[m[36m:[m[32m86[m[36m:[m                    "[1;31mrefresh_token[m": creds.[1;31mrefresh_token[m,
+[35mapp/google_service.py[m[36m:[m[32m89[m[36m:[m                    "[1;31mclient_secret[m": creds.[1;31mclient_secret[m,
+[35mapp/google_service.py[m[36m:[m[32m346[m[36m:[m        info = {"ok": False, "tem_arquivo": False, "scopes": [], "tem_[1;31mrefresh_token[m": False}
+[35mapp/google_service.py[m[36m:[m[32m357[m[36m:[m            info["tem_[1;31mrefresh_token[m"] = bool(data.get("[1;31mrefresh_token[m"))
+[35mapp/google_service.py[m[36m:[m[32m368[m[36m:[m    flow = Flow.from_[1;31mclient_secret[ms_file(
+[35mapp/google_service.py[m[36m:[m[32m387[m[36m:[m    flow = Flow.from_[1;31mclient_secret[ms_file(
+[35mapp/google_service.py[m[36m:[m[32m399[m[36m:[m        "[1;31mrefresh_token[m": creds.[1;31mrefresh_token[m,
+[35mapp/google_service.py[m[36m:[m[32m402[m[36m:[m        "[1;31mclient_secret[m": creds.[1;31mclient_secret[m,
+[35mcredentials.json[m[36m:[m[32m1[m[36m:[m{"web":{"client_id":"98229369796-op31fca9m33klfebgo9idm1nt07epk00.apps.googleusercontent.com","project_id":"pocketmkt","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","[1;31mclient_secret[m":"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","redirect_uris":["http://localhost:5000/oauth2callback`"]}}
+[35mdata/advocacia-set/LoRA-PFET/llm_server.py[m[36m:[m[32m2[m[36m:[mprint("[1;31mHUGGINGFACE_HUB_TOKEN[m:", os.environ.get("[1;31mHUGGINGFACE_HUB_TOKEN[m"))
+[35mdata/advocacia-set/LoRA-PFET/llm_server.py[m[36m:[m[32m5[m[36m:[mos.environ["[1;31mHUGGINGFACE_HUB_TOKEN[m"] = os.environ.get("[1;31mHUGGINGFACE_HUB_TOKEN[m") or "HF_TOKEN_REMOVED"
+[35mdata/advocacia-set/LoRA-PFET/test_llm.py[m[36m:[m[32m2[m[36m:[mprint("TOKEN (parcial):", os.environ.get("[1;31mHUGGINGFACE_HUB_TOKEN[m"))
+[35mmodels/llm_server.py[m[36m:[m[32m2[m[36m:[mprint("[1;31mHUGGINGFACE_HUB_TOKEN[m:", os.environ.get("[1;31mHUGGINGFACE_HUB_TOKEN[m"))
+[35mmodels/llm_server.py[m[36m:[m[32m5[m[36m:[mos.environ["[1;31mHUGGINGFACE_HUB_TOKEN[m"] = "HF_TOKEN_REMOVED"
