@@ -22,3 +22,24 @@ data/
 *.pt
 *.bin
 *.safetensors
+# venv / cache
+venv/
+__pycache__/
+*.pyc
+
+# env & credenciais
+.env
+.env.*
+oauth_credentials.json
+credentials.json
+access_token
+refresh_token
+client_secret
+github-ssh
+github-ssh.pub
+gv
+sheet_id*.txt
+
+# patches e lixo local
+*.diff
+replacements.txt
