@@ -22,3 +22,15 @@ __pycache__/
 # Arquivos grandes de teste
 eval/*.csv
 eval/*.jsonl
+# Segredos/credenciais
+oauth_credentials.json
+credentials.json
+.env
+
+# Modelos e artifacts grandes
+*.zip
+*.ckpt
+*.pt
+*.bin
+*.safetensors
+data/
