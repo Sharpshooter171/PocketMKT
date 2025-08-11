@@ -1,18 +1,24 @@
-# Arquivos de credenciais sensíveis
+# Credenciais e configs sensíveis
 credentials.json
 oauth_credentials.json
 sheet_id.txt
 .env
 
-# Pastas/arquivos temporários e cache
+# Arquivos temporários / cache
 __pycache__/
 *.pyc
+*.pyo
 *.bak
 *.log
 *.jsonl
 *.csv
 
-# Checkpoints e dados grandes
+# Checkpoints e pesos de modelos
 *.ckpt
 *.safetensors
 *.pt
+*.bin
+
+# Arquivos grandes de teste
+eval/*.csv
+eval/*.jsonl
