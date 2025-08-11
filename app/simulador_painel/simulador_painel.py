@@ -15,7 +15,7 @@ def prompt_config_route():
     if request.method == "GET":
         # Busca o prompt_config atual do backend
         try:
-            resp = requests.get("http://18.234.238.135:8000/prompt_config", timeout=5)
+            resp = requests.get("http://3.92.70.163:8000/prompt_config", timeout=5)
             return jsonify(resp.json())
         except Exception as e:
             return jsonify({"error": str(e)}), 500
@@ -23,13 +23,13 @@ def prompt_config_route():
         # Envia novo prompt_config para o backend
         data = request.json
         try:
-            resp = requests.post("http://18.234.238.135:8000/prompt_config", json=data, timeout=5)
+            resp = requests.post("http://3.92.70.163:8000/prompt_config", json=data, timeout=5)
             return jsonify(resp.json())
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
 # 🚀 URL do servidor Flask principal
-FLASK_LOCAL_URL = "http://44.223.0.187:5000/atendimento"
+FLASK_LOCAL_URL = "http://127.0.0.1:5000/processar_atendimento"
 
 print("⚖️ PocketMKT - Painel do Advogado MVP")
 print("=" * 50)

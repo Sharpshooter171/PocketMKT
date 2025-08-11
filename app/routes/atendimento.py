@@ -44,6 +44,7 @@ except ImportError:
 
 from flask import Blueprint, request, jsonify, Response, g, redirect, url_for  # redirect/url_for
 import logging, json, re  # logging estruturado e regex
+from unidecode import unidecode
 
 # Configuração básica de logging (pode ser ajustada depois)
 logging.basicConfig(level=logging.INFO)
@@ -73,7 +74,7 @@ def dispatcher_fluxos_advogado(mensagem):
         "alerta_prazo": fluxo_alerta_prazo,
         "honorarios": fluxo_honorarios,
         "documento_juridico": fluxo_documento_juridico,
-        "envio_documento_cliente": fluxo_envio_documento_cliente,
+        "enviar_documento_cliente": fluxo_envio_documento_cliente,
         "consulta_andamento": fluxo_consulta_andamento,
         "pagamento_fora_padrao": fluxo_pagamento_fora_padrao,
         "indicacao": fluxo_indicacao,
@@ -130,7 +131,7 @@ def processar_mensagem_advogado(mensagem):
 
     # 6. Envio de documento ao cliente
     if fluxo_envio_documento_cliente(mensagem):
-        return {"status": "envio_documento_cliente"}
+        return {"status": "enviar_documento_cliente"}
 
     # 7. Consulta de andamento
     if fluxo_consulta_andamento(mensagem):
@@ -333,7 +334,7 @@ except ImportError:
     log_message = lambda *args: print(f"Log: {args}")
 
 try:
-    from app.ollama_service import get_llama_response
+    from app.ollama_service import get_llama_response, classify_intent_llm
 except ImportError:
     get_llama_response = lambda prompt: "LLM não disponível"
 
@@ -366,29 +367,50 @@ print("🤖 Whisper, Google Sheets, Gmail e Calendar carregados!")
 import re as _re
 _RE_NUM_PROC = _re.compile(r'\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}')
 
+# Helper de detecção de saudação
+def is_saudacao(texto: str) -> bool:
+    t = (texto or "").strip().lower()
+    gatilhos = [
+        "oi", "olá", "ola", "bom dia", "boa tarde", "boa noite",
+        "tudo bem", "como vai", "e aí", "eaí", "salve"
+    ]
+    # saudação curta (até ~25 chars) e sem palavras de intenção
+    return any(t.startswith(g) for g in gatilhos) and not any(
+        k in t for k in ["processo", "agendar", "reuni", "documento", "andamento", "consulta", "rg", "cnh"]
+    )
+
+
 def detect_intent(texto):
-    t = (texto or "").lower().strip()
+    # normaliza acentos e caixa
+    t = unidecode((texto or "").lower().strip())
+
+    import re as _re
+    _RE_NUM_PROC = _re.compile(r'\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}')
+    _RE_HOUR = _re.compile(r'\b(\d{1,2}(:\d{2})?\s?(h|hrs|horas)?)\b', _re.IGNORECASE)
+    _RE_DATE = _re.compile(r'\b(\d{1,2}/\d{1,2}(/\d{2,4})?)\b')
+    _RE_DOW  = _re.compile(r'\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b', _re.IGNORECASE)
 
     # 1) Consulta de andamento (prioridade alta)
-    if ("andamento" in t or "novidade" in t or "como está" in t or "como esta" in t) and "processo" in t:
-        return "consulta_andamento_cliente"
-    if _RE_NUM_PROC.search(t):
+    if (("andamento" in t or "novidade" in t or "como esta" in t) and "processo" in t) or _RE_NUM_PROC.search(t):
         return "consulta_andamento_cliente"
 
     # 2) Agendar consulta
-    if any(k in t for k in ["agendar", "consulta", "horário", "horario", "reunião", "reuniao", "agenda", "sexta", "semana que vem"]):
+    gatilhos_agenda = [
+        "agendar","consulta","horario","reuniao","agenda","marcar","marcacao",
+        "agendamento","consultar horario","sexta","amanha","hoje","semana que vem"
+    ]
+    if any(k in t for k in gatilhos_agenda) or _RE_HOUR.search(t) or _RE_DATE.search(t) or _RE_DOW.search(t):
         return "agendar_consulta_cliente"
 
     # 3) Enviar documento
-    if any(k in t for k in ["rg", "cnh", "comprovante", "documento", "anexo", "pdf", "foto", "imagem"]):
+    if any(k in t for k in ["rg","cnh","comprovante","documento","anexo","pdf","foto","imagem","segue anexo"]):
         return "enviar_documento_cliente"
 
     # 4) Relato de caso (padrão)
-    if any(k in t for k in ["demitid", "pensão", "pensao", "dívida", "divida", "juros", "banco", "indeniza", "direito"]):
+    if any(k in t for k in ["demitid","pensao","divida","juros","banco","indeniza","direito"]):
         return "relato_caso"
 
     return "fluxo_nao_detectado"
-
 
 def processar_relato_caso(texto_ou_audio, telefone_cliente, segmento, tipo_arquivo=None):
     """
@@ -765,9 +787,25 @@ def processar_atendimento():
         mensagem = (data.get('mensagem') or '').strip()
         numero = data.get('numero')
         tipo_usuario = (data.get('tipo_usuario') or '').lower()
+
+        # Saudação -> responde educadamente e triagem
+        if is_saudacao(mensagem):
+            g.fluxo_detectado = "saudacao_inicial"
+            resposta_texto = "Olá! Em que posso te ajudar hoje?"
+            payload = {
+                "resposta": resposta_texto,
+                "fluxo": "saudacao_inicial",
+                "numero": numero,
+                "tipo_usuario": tipo_usuario,
+                "intent_source": "rule",
+                "is_saudacao": True
+            }
+            return jsonify(payload), 200
+
         fluxo_detectado = None
         resposta_texto = "Em breve..."
         ids = {}
+        intent_source = "rule"  # telemetria padrão
 
         # ---------------- Fluxos ADVOGADO (mantém lógica existente) ----------------
         if tipo_usuario == 'advogado':
@@ -798,7 +836,7 @@ def processar_atendimento():
                     "📝 Vou lidar com o **documento**: posso enviar **modelo** de **contrato** ou revisar a **petição**."
                 )
             elif fluxo_detectado in (
-                'envio_documento_cliente','consulta_andamento','pagamento_fora_padrao',
+                'enviar_documento_cliente','consulta_andamento','pagamento_fora_padrao',
                 'indicacao','documento_pendente','status_negociacao','decisao_permuta',
                 'sumico_cliente','update_clientes_aguardando','update_documento_pendente',
                 'nao_atendimento_area','status_multiplos_processos','notificacao_cliente',
@@ -826,6 +864,9 @@ def processar_atendimento():
 
             # 1) DETECÇÃO (nova)
             intent = detect_intent(mensagem)
+            # Normalização de rótulo legado
+            if intent == "envio_documento_cliente":
+                intent = "enviar_documento_cliente"
             # 2) AÇÃO POR FLUXO (Google)
             if intent == "relato_caso":
                 if oauth_ok:
@@ -925,6 +966,25 @@ def processar_atendimento():
             else:
                 fluxo_detectado = "fluxo_nao_detectado"
                 resposta_texto = "Posso te ajudar com **seu caso**, **agendar** um horário ou **salvar seu documento**."
+            # 🔁 FALLBACK: se ainda não detectou nada por regra, classificar via LLM (rótulos fechados)
+            if fluxo_detectado == "fluxo_nao_detectado":
+                try:
+                    rotulo = classify_intent_llm(mensagem)
+                    if rotulo in {"relato_caso","agendar_consulta_cliente","enviar_documento_cliente","consulta_andamento_cliente"}:
+                        fluxo_detectado = rotulo
+                        ids = ids or {}
+                        intent_source = "llm"  # telemetria
+                        if rotulo == "relato_caso":
+                            resposta_texto = "✅ Seu **relato** foi registrado."
+                        elif rotulo == "agendar_consulta_cliente":
+                            resposta_texto = "📅 Vamos **agendar** um horário. Prefere manhã, tarde ou noite?"
+                        elif rotulo == "enviar_documento_cliente":
+                            resposta_texto = "📎 Pode me enviar o **documento** (foto ou PDF)."
+                        elif rotulo == "consulta_andamento_cliente":
+                            resposta_texto = "🔎 Me informe o **número do processo** para consultar o andamento."
+                except Exception:
+                    pass
+
         else:
             fluxo_detectado = 'tipo_usuario_desconhecido'
             resposta_texto = 'Informe tipo_usuario = cliente ou advogado.'
@@ -936,7 +996,8 @@ def processar_atendimento():
             "resposta": resposta_texto,
             "fluxo": fluxo_detectado,
             "numero": numero,
-            "tipo_usuario": tipo_usuario
+            "tipo_usuario": tipo_usuario,
+            "intent_source": intent_source,
         }
         if ids:
             payload.update({k: v for k, v in ids.items() if v})

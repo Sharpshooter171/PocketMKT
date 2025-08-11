@@ -1,59 +1,79 @@
+from unidecode import unidecode
+import re
+
 def fluxo_relato_caso(mensagem):
     """Detecta relato de novo caso do cliente."""
-    texto = mensagem.lower()
+    texto = unidecode(mensagem.lower())
     if any(palavra in texto for palavra in [
         "abrir processo", "relatar caso", "preciso de advogado", "tenho um problema",
-        "quero resolver um problema", "meu patrão", "fui demitido", "direito trabalhista", "direito de família", "direito civil", "direito penal", "direito previdenciário", "direito do consumidor"
+        "quero resolver um problema", "meu patrao", "fui demitido", "direito trabalhista",
+        "direito de familia", "direito civil", "direito penal", "direito previdenciario",
+        "direito do consumidor"
     ]):
+        return {"acao": "relato_caso"}
+    # termos sem acento / troncos
+    if any(k in texto for k in ["demitid","pensao","divida","indeniza","direito","banco","juros"]):
         return {"acao": "relato_caso"}
     return None
 
 def fluxo_consulta_andamento_cliente(mensagem):
     """Detecta consulta de andamento por parte do cliente."""
-    texto = mensagem.lower()
+    texto = unidecode(mensagem.lower())
     if any(palavra in texto for palavra in [
-        "andamento do meu processo", "meu processo", "status do caso", "já saiu decisão", "tem novidade", "como está meu caso", "consulta andamento", "status do processo"
+        "andamento do meu processo", "meu processo", "status do caso", "ja saiu decisao",
+        "tem novidade", "como esta meu caso", "consulta andamento", "status do processo"
     ]):
         return {"acao": "consulta_andamento_cliente"}
     return None
 
 def fluxo_enviar_documento_cliente(mensagem):
     """Detecta envio de documento pelo cliente."""
-    texto = mensagem.lower()
+    texto = unidecode(mensagem.lower())
     if any(palavra in texto for palavra in [
-        "enviei documento", "segue anexo", "enviei meu rg", "comprovante de endereço", "enviei cnh", "enviei meus documentos", "segue comprovante", "segue documento"
+        "enviei documento", "segue anexo", "enviei meu rg", "comprovante de endereco",
+        "enviei cnh", "enviei meus documentos", "segue comprovante", "segue documento"
     ]):
         return {"acao": "enviar_documento_cliente"}
     return None
 
 def fluxo_agendar_consulta_cliente(mensagem):
     """Detecta pedido de agendamento de consulta pelo cliente."""
-    texto = mensagem.lower()
-    if any(palavra in texto for palavra in [
-        "agendar consulta", "quero marcar", "preciso de uma reunião", "agendar reunião", "marcar consulta", "marcar horário", "agendar atendimento"
-    ]):
+    texto = unidecode(mensagem.lower())
+    gatilhos = [
+        "agendar consulta","quero marcar","preciso de uma reuniao","agendar reuniao","marcar consulta",
+        "marcar horario","agendar atendimento","marcacao","agendamento","agenda",
+        "consultar horario","amanha","hoje","sexta","semana que vem"
+    ]
+    if (
+        any(p in texto for p in gatilhos)
+        or re.search(r'\b(\d{1,2}(:\d{2})?\s?(h|hrs|horas)?)\b', texto)
+        or re.search(r'\b(\d{1,2}/\d{1,2}(/\d{2,4})?)\b', texto)
+        or re.search(r'\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b', texto, re.IGNORECASE)
+    ):
         return {"acao": "agendar_consulta_cliente"}
     return None
 
 def fluxo_atualizar_cadastro_cliente(mensagem):
     """Detecta pedido de atualização de cadastro pelo cliente."""
-    texto = mensagem.lower()
+    texto = unidecode(mensagem.lower())
     if any(palavra in texto for palavra in [
-        "mudei de endereço", "atualizar meu cadastro", "meu telefone mudou", "troquei de telefone", "novo endereço", "novo telefone", "atualizar endereço", "atualizar telefone"
+        "mudei de endereco", "atualizar meu cadastro", "meu telefone mudou", "troquei de telefone",
+        "novo endereco", "novo telefone", "atualizar endereco", "atualizar telefone"
     ]):
         return {"acao": "atualizar_cadastro_cliente"}
     return None
-import re
 
 def fluxo_update_documento_pendente(mensagem):
     """Detecta atualização sobre documento faltando."""
-    if "documento pendente" in mensagem.lower() or "atualização documento" in mensagem.lower():
+    t = unidecode(mensagem.lower())
+    if "documento pendente" in t or "atualizacao documento" in t:
         return {"acao": "update_documento_pendente"}
     return None
 
 def fluxo_nao_atendimento_area(mensagem):
     """Detecta recusa/explicação de não atendimento de área."""
-    if "não atendo" in mensagem.lower() or "não faço" in mensagem.lower() or "fora da minha área" in mensagem.lower():
+    t = unidecode(mensagem.lower())
+    if "nao atendo" in t or "nao faco" in t or "fora da minha area" in t:
         return {"acao": "recusa_area"}
     return None
 
@@ -100,7 +120,7 @@ def fluxo_envio_documento_cliente(mensagem):
     """Detecta comando para enviar documento ao cliente."""
     texto = mensagem.lower()
     if "enviar para o cliente" in texto or "mandar por email" in texto or "enviar documento" in texto:
-        return {"acao": "enviar_documento"}
+        return {"acao": "enviar_documento_cliente"}
     return None
 
 def fluxo_consulta_andamento(mensagem):

@@ -232,13 +232,13 @@ def _log_estruturado(entry: dict):
 def analisar_resposta_bot(resposta_texto, resposta_json=None):
     """
     Analisa a resposta do bot para detectar:
-    1. Se o fluxo foi detectado
+    1. Se o fluxo foi detectado (preferindo JSON)
     2. Se houve integração com Google APIs
     3. Tipo de resposta (LLM vs fallback)
     """
     analise = {
-        "fluxo_detectado": False,
-        "tipo_fluxo": None,
+        "fluxo_detectado": False,  # será atualizado para True se JSON tiver 'fluxo'
+        "tipo_fluxo": None,        # tipo/label do fluxo identificado
         "google_sheets_usado": False,
         "google_calendar_usado": False,
         "gmail_usado": False,
@@ -246,64 +246,70 @@ def analisar_resposta_bot(resposta_texto, resposta_json=None):
         "ids_gerados": {},
         "indicadores_integracao": []
     }
-    
-    # Detectar se é resposta de LLM (geralmente mais longa e contextual)
-    if len(resposta_texto) > 100 and any(palavra in resposta_texto.lower() for palavra in 
-                                       ['entendo', 'compreendo', 'vamos', 'posso ajudar', 'para isso']):
-        analise["resposta_llm"] = True
-        stats_global["respostas_llm"] += 1
-    else:
-        stats_global["respostas_fallback"] += 1
-    
-    # Detectar integrações Google Sheets
-    if any(termo in resposta_texto.lower() for termo in 
-           ['planilha', 'sheet', 'registrado', 'cadastrado', 'dados salvos']):
-        analise["google_sheets_usado"] = True
-        analise["indicadores_integracao"].append("Google Sheets")
-        stats_global["integracao_google_sheets"] += 1
-    
-    # Detectar integrações Google Calendar
-    if any(termo in resposta_texto.lower() for termo in 
-           ['agendado', 'calendar', 'marcado', 'horário confirmado', 'evento criado']):
-        analise["google_calendar_usado"] = True
-        analise["indicadores_integracao"].append("Google Calendar")
-        stats_global["integracao_google_calendar"] += 1
-    
-    # Detectar integrações Gmail
-    if any(termo in resposta_texto.lower() for termo in 
-           ['email enviado', 'e-mail enviado', 'notificação enviada', 'gmail']):
-        analise["gmail_usado"] = True
-        analise["indicadores_integracao"].append("Gmail")
-        stats_global["integracao_gmail"] += 1
-    
-    # Extrair IDs se presentes na resposta JSON
+
+    # Preferir fluxo do JSON
     if resposta_json and isinstance(resposta_json, dict):
+        # Extrair IDs se presentes
         if 'sheet_id' in resposta_json:
             analise["ids_gerados"]["sheet_id"] = resposta_json['sheet_id']
         if 'event_id' in resposta_json:
             analise["ids_gerados"]["event_id"] = resposta_json['event_id']
         if 'email_id' in resposta_json:
             analise["ids_gerados"]["email_id"] = resposta_json['email_id']
-    
-    # Detectar tipo de fluxo pela resposta
-    fluxos_keywords = {
-        "relato_caso": ["caso", "processo", "situação jurídica", "direitos"],
-        "onboarding_advogado": ["cadastro", "oab", "especialidade", "escritório"],
-        "agendar_consulta": ["consulta", "agendamento", "horário", "reunião"],
-        "documento_juridico": ["documento", "petição", "contrato", "modelo"],
-        "alerta_prazo": ["prazo", "deadline", "vencimento", "audiência"]
-    }
-    
-    for fluxo, keywords in fluxos_keywords.items():
-        if any(keyword in resposta_texto.lower() for keyword in keywords):
+        # Fluxo direto do JSON
+        fluxo_json = resposta_json.get('fluxo')
+        if fluxo_json:
+            analise["tipo_fluxo"] = fluxo_json
             analise["fluxo_detectado"] = True
-            analise["tipo_fluxo"] = fluxo
-            stats_global["fluxos_detectados"] += 1
-            break
-    
+
+    # Detectar se é resposta de LLM (heurística simples)
+    if len(resposta_texto) > 100 and any(palavra in resposta_texto.lower() for palavra in 
+                                       ['entendo', 'compreendo', 'vamos', 'posso ajudar', 'para isso']):
+        analise["resposta_llm"] = True
+        stats_global["respostas_llm"] += 1
+    else:
+        stats_global["respostas_fallback"] += 1
+
+    # Heurísticas de integrações (mantidas)
+    if any(termo in resposta_texto.lower() for termo in 
+           ['planilha', 'sheet', 'registrado', 'cadastrado', 'dados salvos']):
+        analise["google_sheets_usado"] = True
+        analise["indicadores_integracao"].append("Google Sheets")
+        stats_global["integracao_google_sheets"] += 1
+
+    if any(termo in resposta_texto.lower() for termo in 
+           ['agendado', 'calendar', 'marcado', 'horário confirmado', 'evento criado']):
+        analise["google_calendar_usado"] = True
+        analise["indicadores_integracao"].append("Google Calendar")
+        stats_global["integracao_google_calendar"] += 1
+
+    if any(termo in resposta_texto.lower() for termo in 
+           ['email enviado', 'e-mail enviado', 'notificação enviada', 'gmail']):
+        analise["gmail_usado"] = True
+        analise["indicadores_integracao"].append("Gmail")
+        stats_global["integracao_gmail"] += 1
+
+    # Fallback: apenas se JSON não trouxer 'fluxo', tentar heurística textual
     if not analise["fluxo_detectado"]:
-        stats_global["fluxos_nao_detectados"] += 1
-    
+        fluxos_keywords = {
+            "relato_caso": ["caso", "processo", "situação jurídica", "direitos"],
+            "onboarding_advogado": ["cadastro", "oab", "especialidade", "escritório"],
+            "agendar_consulta": ["consulta", "agendamento", "horário", "reunião"],
+            "documento_juridico": ["documento", "petição", "contrato", "modelo"],
+            "alerta_prazo": ["prazo", "deadline", "vencimento", "audiência"]
+        }
+        for fluxo, keywords in fluxos_keywords.items():
+            if any(keyword in resposta_texto.lower() for keyword in keywords):
+                analise["fluxo_detectado"] = True
+                analise["tipo_fluxo"] = fluxo
+                stats_global["fluxos_detectados"] += 1
+                break
+        if not analise["fluxo_detectado"]:
+            stats_global["fluxos_nao_detectados"] += 1
+    else:
+        # Já detectado via JSON
+        stats_global["fluxos_detectados"] += 1
+
     return analise
 
 def verificar_integracao_google_posterior(cenario_nome, ids_gerados):
@@ -473,18 +479,19 @@ def testar_cenarios(cenarios, numero, tipo_usuario, prefixo_csv):
                 else:
                     stats_global["contratos_invalidos"] += 1
                 analise = analisar_resposta_bot(resposta_texto, resposta_json)
-                verificacao_google = verificar_integracao_google_posterior(cenario['nome'], analise['ids_gerados'])
                 fluxo_identificado = resposta_json.get('fluxo') or analise['tipo_fluxo'] or None
+                fluxo_ok = (fluxo_identificado == cenario['espera_fluxo'])
+                verificacao_google = verificar_integracao_google_posterior(cenario['nome'], analise['ids_gerados'])
                 print(f"👤 Usuário ({tipo_usuario}): {cenario['mensagem']}")
                 print(f"🎯 Fluxo esperado: {cenario['espera_fluxo']}")
-                print(f"✅ Fluxo detectado: {analise['fluxo_detectado']} ({analise['tipo_fluxo']})")
+                print(f"✅ Fluxo correto: {fluxo_ok} (recebido: {fluxo_identificado or 'N/A'})")
                 print(f"🤖 Tipo resposta: {'LLM' if analise['resposta_llm'] else 'Fallback'}")
                 print(f"🔗 Integrações: {', '.join(analise['indicadores_integracao']) if analise['indicadores_integracao'] else 'Nenhuma'}")
                 print(f"📋 IDs gerados: {analise['ids_gerados'] if analise['ids_gerados'] else 'Nenhum'}")
                 print(f"🤖 Bot: {resposta_texto[:200]}{'...' if len(resposta_texto) > 200 else ''}\n")
                 resultado_linha = [
                     tipo_usuario.capitalize(), cenario['nome'], cenario['mensagem'], cenario['espera_fluxo'],
-                    analise['fluxo_detectado'], analise['tipo_fluxo'] or 'Não detectado',
+                    fluxo_ok, fluxo_identificado or 'Não detectado',
                     'LLM' if analise['resposta_llm'] else 'Fallback',
                     analise['google_sheets_usado'], analise['google_calendar_usado'], analise['gmail_usado'],
                     ', '.join(analise['indicadores_integracao']),

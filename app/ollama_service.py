@@ -3,7 +3,7 @@ from app.prompt_config import prompt_config
 
 print("🧠 Carregando serviço de integração com Ollama...")
 
-OLLAMA_API_URL = "http://18.234.238.135:8000/infer"
+OLLAMA_API_URL = "http://3.92.70.163:8000/infer"
 
 
 def get_llama_response(client_message, system_prompt=None, contexto_cliente=None):
@@ -43,3 +43,29 @@ def get_llama_response(client_message, system_prompt=None, contexto_cliente=None
     except Exception as e:
         print("❌ ERRO AO CHAMAR OLLAMA:", e)
         return "Erro ao processar a resposta da IA."
+
+# 🔎 Classificação de intenção (rótulos fechados, saída 1 rótulo)
+def classify_intent_llm(texto: str) -> str:
+    """Retorna um rótulo dentre:
+    relato_caso | agendar_consulta_cliente | enviar_documento_cliente | consulta_andamento_cliente | outro
+    """
+    import requests
+    try:
+        system = (
+            "Você é um classificador. Responda APENAS um rótulo exato, em minúsculas, "
+            "entre: relato_caso | agendar_consulta_cliente | enviar_documento_cliente | consulta_andamento_cliente | outro. "
+            "Sem explicações, sem texto adicional."
+        )
+        prompt = f"{system}\n\nMENSAGEM: {texto}\nRÓTULO:"
+        payload = {"model": "mistral-7b-instruct-v0.2-advocacia", "prompt": prompt, "stream": False}
+        resp = requests.post(OLLAMA_API_URL, json=payload, timeout=45)
+        if resp.status_code != 200:
+            print(f"❌ classify_intent_llm HTTP {resp.status_code}: {resp.text}")
+            return "outro"
+        out = (resp.json().get("response") or "").strip().split()[0].lower()
+        return out if out in {
+            "relato_caso","agendar_consulta_cliente","enviar_documento_cliente","consulta_andamento_cliente","outro"
+        } else "outro"
+    except Exception as e:
+        print("❌ classify_intent_llm erro:", e)
+        return "outro"

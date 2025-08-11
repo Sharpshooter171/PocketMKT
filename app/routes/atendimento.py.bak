@@ -294,13 +294,12 @@ def prompt_config_api():
 # Endpoint opcional para status detalhado (mock)
 @atendimento_bp.route('/status', methods=['GET'])
 def status_backend():
+    svc = get_google_sheets_service()
     return jsonify({
         "flask_backend": "OK",
-        "google_sheets_status": "OK",
-        "google_calendar_status": "OK",
-        "gmail_status": "OK",
-        "llm_status": "OK"
-    })
+        "google_oauth": bool(svc is not None),
+        "endpoints": ["/processar_atendimento", "/mensagem", "/authorize", "/oauth2callback", "/status"]
+    }), 200
 import traceback
 import os
 import json
@@ -755,6 +754,14 @@ def processar_atendimento():
     Sempre retorna HTTP 200 com contrato mínimo (resposta, fluxo, numero, tipo_usuario, ids...)."""
     try:
         data = request.get_json() or {}
+        # Healthcheck curto-circuito (sem exigir OAuth ou outros requisitos)
+        if data.get("healthcheck"):
+            return jsonify({
+                "resposta": "pong",
+                "fluxo": "healthcheck",
+                "numero": data.get("numero"),
+                "tipo_usuario": (data.get("tipo_usuario") or "").lower()
+            }), 200
         mensagem = (data.get('mensagem') or '').strip()
         numero = data.get('numero')
         tipo_usuario = (data.get('tipo_usuario') or '').lower()
@@ -813,41 +820,44 @@ def processar_atendimento():
 
         # ---------------- Fluxos CLIENTE (Google + detecção simples) ------------------
         elif tipo_usuario == 'cliente':
-            # ✅ Se não houver OAuth, redireciona para autorizar
+            # ✅ Modo simulado quando faltar OAuth (sem redirect)
             svc = get_google_sheets_service()
-            if svc is None:
-                return redirect(url_for("google.authorize"))
+            oauth_ok = svc is not None
 
             # 1) DETECÇÃO (nova)
             intent = detect_intent(mensagem)
             # 2) AÇÃO POR FLUXO (Google)
             if intent == "relato_caso":
-                ok = registrar_caso_planilha(
-                    nome_escritorio=f"Escritório {(data.get('escritorio_id') or 'Geral').title()}",
-                    dados_caso={
-                        "nome_cliente": "NÃO_INFORMADO",
-                        "telefone": numero or "",
-                        "area_direito": "Geral",
-                        "urgencia": "Média",
-                        "resumo_caso": mensagem or "",
-                        "observacoes": ""
-                    },
-                    email_advogado=None
-                )
-                # tentar identificar o sheet_id persistido
-                try:
-                    nome_escritorio = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
-                    arquivo_planilha_escritorio = f"sheet_id_{nome_escritorio.replace(' ', '_').lower()}.txt"
-                    if os.path.exists(arquivo_planilha_escritorio):
-                        with open(arquivo_planilha_escritorio, 'r') as f:
-                            ids['sheet_id'] = f.read().strip()
-                except Exception:
-                    pass
+                if oauth_ok:
+                    ok = registrar_caso_planilha(
+                        nome_escritorio=f"Escritório {(data.get('escritorio_id') or 'Geral').title()}",
+                        dados_caso={
+                            "nome_cliente": "NÃO_INFORMADO",
+                            "telefone": numero or "",
+                            "area_direito": "Geral",
+                            "urgencia": "Média",
+                            "resumo_caso": mensagem or "",
+                            "observacoes": ""
+                        },
+                        email_advogado=None
+                    )
+                    # tentar identificar o sheet_id persistido
+                    try:
+                        nome_escritorio = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                        arquivo_planilha_escritorio = f"sheet_id_{nome_escritorio.replace(' ', '_').lower()}.txt"
+                        if os.path.exists(arquivo_planilha_escritorio):
+                            with open(arquivo_planilha_escritorio, 'r') as f:
+                                ids['sheet_id'] = f.read().strip()
+                    except Exception:
+                        pass
+                else:
+                    ok = True  # simulado
                 fluxo_detectado = "relato_caso"
                 resposta_texto = (
-    "✅ Seu **relato** foi registrado. Quer **agendar** uma conversa com o advogado hoje? "
-    "Posso sugerir horários ou você me diz o melhor período (manhã/tarde/noite)."
-)
+                    "✅ Seu **relato** foi registrado na **planilha** (simulado)."
+                    if not oauth_ok else
+                    "✅ Seu **relato** foi registrado na **planilha**."
+                )
 
             elif intent == "consulta_andamento_cliente":
                 resposta_texto = (
@@ -857,46 +867,60 @@ def processar_atendimento():
                 )
                 fluxo_detectado = "consulta_andamento_cliente"
 
-                                    elif intent == "agendar_consulta_cliente":
-                from datetime import datetime, timedelta, timezone
-                inicio = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(timespec="seconds")
-                fim    = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat(timespec="seconds")
-                event_id, event_link = criar_evento_calendar(
-                    titulo="Consulta jurídica",
-                    inicio_iso=inicio,
-                    fim_iso=fim,
-                    convidados_emails=None,
-                    descricao=f"Agendamento automático para {numero}"
-                )
-                if event_id:
-                    ids["event_id"] = event_id
-                    # (Opcional) enviar email de confirmação para marcar "Gmail usado"
-                    try:
-                        email_id = enviar_email_gmail(
-                            para="seuemail+teste@gmail.com",
-                            assunto="Confirmação de agendamento",
-                            texto=f"Seu agendamento está confirmado. Link do evento: {event_link}"
-                        )
-                        if email_id:
-                            ids["email_id"] = email_id
-                    except Exception:
-                        pass
-                    resposta_texto = f"✅ **Agendamento criado** no **Calendar**. Link: {event_link} | 📧 Confirmação enviada por e-mail."
+            elif intent == "agendar_consulta_cliente":
+                if not oauth_ok:
+                    fluxo_detectado = "agendar_consulta_cliente"
+                    resposta_texto = "✅ evento criado no calendar (simulado)"
+                    ids["event_id"] = "mock_event_id"
                 else:
-                    resposta_texto = "⚠️ Não consegui criar agora. Me diga **dia** e **período** (manhã/tarde/noite) e eu tento novamente."
-                fluxo_detectado = "agendar_consulta_cliente"
+                    from datetime import datetime, timedelta, timezone
+                    inicio = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(timespec="seconds")
+                    fim    = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat(timespec="seconds")
+                    event_id, event_link = criar_evento_calendar(
+                        titulo="Consulta jurídica",
+                        inicio_iso=inicio,
+                        fim_iso=fim,
+                        convidados_emails=None,
+                        descricao=f"Agendamento automático para {numero}"
+                    )
+                    if event_id:
+                        ids["event_id"] = event_id
+                        # (Opcional) enviar email de confirmação para marcar "Gmail usado"
+                        email_ok = False
+                        try:
+                            email_id = enviar_email_gmail(
+                                para="seuemail+teste@gmail.com",
+                                assunto="Confirmação de agendamento",
+                                texto=f"Seu agendamento está confirmado. Link do evento: {event_link}"
+                            )
+                            if email_id:
+                                ids["email_id"] = email_id
+                                email_ok = True
+                        except Exception:
+                            pass
+                        resposta_texto = f"✅ evento criado no calendar. Link: {event_link}"
+                        if email_ok:
+                            resposta_texto += " | e-mail enviado pelo gmail."
+                    else:
+                        resposta_texto = "⚠️ Não consegui criar agora. Me diga **dia** e **período** (manhã/tarde/noite) e eu tento novamente."
+                    fluxo_detectado = "agendar_consulta_cliente"
 
             elif intent == "enviar_documento_cliente":
-                conteudo = (mensagem or "Documento enviado pelo cliente").encode("utf-8")
-                file_id, file_link = upload_drive_bytes(
-                    "documento_cliente.txt", conteudo, pasta_id=None, mime_type="text/plain"
-                )
-                if file_id:
-                    ids["file_id"] = file_id
-                    resposta_texto = f"✅ **Documento** salvo no **Drive**. Link: {file_link}"
+                if not oauth_ok:
+                    fluxo_detectado = "enviar_documento_cliente"
+                    resposta_texto = "✅ documento salvo (simulado)"
+                    ids["file_id"] = "mock_file_id"
                 else:
-                    resposta_texto = "⚠️ Não consegui salvar seu documento no **Drive** agora."
-                fluxo_detectado = "enviar_documento_cliente"
+                    conteudo = (mensagem or "Documento enviado pelo cliente").encode("utf-8")
+                    file_id, file_link = upload_drive_bytes(
+                        "documento_cliente.txt", conteudo, pasta_id=None, mime_type="text/plain"
+                    )
+                    if file_id:
+                        ids["file_id"] = file_id
+                        resposta_texto = f"✅ **Documento** salvo no **Drive**. Link: {file_link}"
+                    else:
+                        resposta_texto = "⚠️ Não consegui salvar seu documento no **Drive** agora."
+                    fluxo_detectado = "enviar_documento_cliente"
 
             else:
                 fluxo_detectado = "fluxo_nao_detectado"
