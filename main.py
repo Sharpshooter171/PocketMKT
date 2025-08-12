@@ -20,6 +20,12 @@ except ImportError:
     def init_db():
         print("⚠️ init_db não disponível (import falhou)")
 
+# Importa integração Twilio (Webhook)
+try:
+    from app.twilio_webhook import twilio_bp
+except ImportError:
+    twilio_bp = None  # blueprint opcional
+
 
 print("🚀 Iniciando main.py do PocketMKT...")
 
@@ -41,6 +47,9 @@ def create_app():
     app.register_blueprint(atendimento_bp)
     if google_bp:
         app.register_blueprint(google_bp)
+    if twilio_bp:
+        app.register_blueprint(twilio_bp)
+
 
     @app.route("/")
     def home():  # noqa: D401
