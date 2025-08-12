@@ -1,0 +1,85 @@
+# PocketMKT – Documentação do MVP
+
+## Visão Geral
+O PocketMKT é um assistente virtual que integra atendimento automatizado a clientes com ferramentas de produtividade (Google Calendar, Google Drive, Google Sheets) e processamento inteligente de linguagem natural (LLM).  
+O sistema foi projetado para rodar em arquitetura distribuída na AWS, com um servidor para lógica de negócios e outro para processamento de IA.
+
+---
+
+## Lógica de Funcionamento
+
+### 1. Recebimento de Mensagens
+- Mensagens chegam pelo **Twilio/WhatsApp** no endpoint:
+
+/twilio/webhook
+
+- O webhook captura:
+- Texto da mensagem
+- Número de telefone
+- Identificação de perfil (cliente, advogado)
+
+### 2. Processamento
+- O webhook envia os dados para o endpoint interno:
+/processar_atendimento
+
+- O `processar_atendimento`:
+1. Tenta identificar o fluxo/intenção usando regras internas.
+2. Caso não consiga, faz **fallback para a LLM** na GPU AWS.
+3. Retorna uma resposta estruturada com:
+   - `resposta` → Texto a ser enviado ao usuário.
+   - `fluxo` → Nome do fluxo detectado.
+   - `tipo_usuario` → Classificação do remetente.
+
+### 3. Integrações
+- **Se conectado ao Google** (OAuth autorizado):
+- Pode criar planilhas.
+- Criar eventos no Google Calendar.
+- Enviar arquivos para Google Drive.
+- **Se Whisper instalado e ativo**:
+- Pode transcrever áudio automaticamente.
+
+---
+
+## Arquitetura Atual
+
+### CPU AWS (Servidor Principal)
+- **IP Público:** 13.223.35.138
+- **Funções**:
+- Executa o servidor Flask com todos os endpoints.
+- Hospeda o Painel Interativo do MVP.
+- Recebe e processa webhooks do Twilio.
+- Chama a GPU AWS quando precisa de processamento da LLM.
+- **Domínios**:
+- API: `https://pocketmkt-api.duckdns.org`
+- Painel: `https://pocketmkt-panel.duckdns.org`
+
+### GPU AWS (Servidor de IA)
+- **IP Público:** 98.87.41.241
+- **Funções**:
+- Roda o serviço da LLM (`mistral-7b-instruct-v0.2-advocacia`) via Ollama.
+- Responde apenas para a CPU AWS pela rede privada (`172.31.x.x`).
+
+---
+
+## Painel Interativo
+- URL: `https://pocketmkt-panel.duckdns.org/painel`
+- Funções:
+- Simular atendimentos.
+- Monitorar status do backend.
+- Alternar e testar modos de operação.
+- Comunicação direta com a API principal (`/processar_atendimento`).
+
+---
+
+## Fluxo de Mensagem – Resumo
+1. **WhatsApp/Twilio** → `/twilio/webhook` (CPU AWS).
+2. CPU AWS → `/processar_atendimento`.
+3. Se necessário → chama LLM (GPU AWS).
+4. Resposta → Twilio → WhatsApp do usuário.
+
+---
+
+## Observações
+- Certificados SSL gerenciados com Nginx + Certbot na CPU AWS.
+- Integrações opcionais do Google requerem autenticação OAuth prévia.
+- LLM e Whisper são independentes: é possível rodar sem um deles.
