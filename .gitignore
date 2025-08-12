@@ -53,3 +53,8 @@ main.py.example
 .env
 .env.*
 push origin main.example
+
+# Secrets
+.env
+.env.*
+push origin main.example
