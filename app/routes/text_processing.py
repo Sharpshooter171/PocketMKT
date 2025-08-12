@@ -241,33 +241,64 @@ def fluxo_documento_juridico(mensagem):
     if docs:
         return {"documentos": docs}
     return None
-import spacy
 
-# Tenta carregar o modelo spaCy, se falhar usa mock
-try:
-    nlp = spacy.load("pt_core_news_md")  # Pode trocar por "pt_core_news_sm" se precisar otimizar RAM
-except OSError:
-    print("AVISO: Modelo spaCy não encontrado. Usando função mock para testes.")
-    # Mock simples para permitir testes sem o modelo
+import os, traceback
+import spacy, spacy.util
+
+USE_SPACY = os.getenv("USE_SPACY", "true").lower() == "true"
+SPACY_MODEL = os.getenv("SPACY_MODEL", "pt_core_news_sm")
+
+nlp = None
+if USE_SPACY:
+    try:
+        if not spacy.util.is_package(SPACY_MODEL):
+            print(f"AVISO: '{SPACY_MODEL}' não é pacote registrado do spaCy. Tentando carregar mesmo assim...")
+        nlp = spacy.load(SPACY_MODEL)
+        print(f"✅ spaCy carregado: {SPACY_MODEL} | pipes={nlp.pipe_names}")
+    except Exception:
+        print("⚠️  Falha ao carregar spaCy. Detalhes:")
+        traceback.print_exc()
+        print("AVISO: Modelo spaCy não encontrado. Usando função mock para testes.")
+        # Mock simples para permitir testes sem o modelo
+        class MockNLP:
+            def __call__(self, text):
+                return MockDoc(text)
+
+        class MockDoc:
+            def __init__(self, text):
+                self.text = text
+                self.ents = []
+
+            def __iter__(self):
+                return iter([MockToken(word) for word in self.text.split()])
+
+        class MockToken:
+            def __init__(self, text):
+                self.text = text
+                self.lemma_ = text.lower()
+
+        nlp = MockNLP()
+else:
+    print("AVISO: USE_SPACY=false — usando função mock.")
     class MockNLP:
         def __call__(self, text):
             return MockDoc(text)
-    
+
     class MockDoc:
         def __init__(self, text):
             self.text = text
-            self.ents = []  # Lista vazia de entidades
-            
+            self.ents = []
+
         def __iter__(self):
-            # Retorna tokens mockados
             return iter([MockToken(word) for word in self.text.split()])
-    
+
     class MockToken:
         def __init__(self, text):
             self.text = text
             self.lemma_ = text.lower()
-    
+
     nlp = MockNLP()
+
 
 def analisar_texto(text):
     doc = nlp(text)
