@@ -2,6 +2,13 @@ import os
 import json
 from flask import Blueprint, redirect, url_for, session, request
 
+# .env support
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 # Handle optional Google API dependencies
 try:
     from google.oauth2.credentials import Credentials
@@ -19,7 +26,7 @@ except ImportError:
 # Cria um Blueprint para o serviço do Google
 google_bp = Blueprint('google', __name__)
 
-# ⚠️ MESMO SCOPES E REDIRECT_URI do PocketMKT.py
+# ⚠️ MESMO SCOPES do PocketMKT.py
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
     "https://www.googleapis.com/auth/drive",
@@ -27,8 +34,12 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/calendar"
 ]
-REDIRECT_URI = "http://127.0.0.1:5000/oauth2callback"
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
+# Variáveis configuráveis via .env
+REDIRECT_URI   = os.getenv("GOOGLE_REDIRECT_URI", "http://127.0.0.1:5000/oauth2callback")
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = os.getenv("OAUTHLIB_INSECURE_TRANSPORT", "1")
+CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_FILE", "credentials.json")
+OAUTH_FILE       = os.getenv("GOOGLE_OAUTH_FILE", "oauth_credentials.json")
 
 print("📊 Carregando serviço de integração com Google Sheets...")
 
@@ -39,11 +50,11 @@ def get_google_sheets_service():
         print("⚠️ Google APIs não disponíveis, retornando serviço simulado")
         return None
     # ⚠️ Helpers não devem redirecionar. Se faltar credencial, devolve None.
-    if not os.path.exists("oauth_credentials.json"):
-        print("🔐 Primeira autenticação necessária (oauth_credentials.json ausente)")
+    if not os.path.exists(OAUTH_FILE):
+        print("🔐 Primeira autenticação necessária (oauth_credentials ausente)")
         return None  # nunca redirecionar em helpers
 
-    with open("oauth_credentials.json", "r") as f:
+    with open(OAUTH_FILE, "r") as f:
         creds_data = json.load(f)
     creds = Credentials(**creds_data)
 
@@ -54,7 +65,7 @@ def get_google_sheets_service():
         except ImportError:
             print("⚠️ Google auth transport não disponível")
             return None
-        with open("oauth_credentials.json", "w") as f:
+        with open(OAUTH_FILE, "w") as f:
             json.dump({
                 "token": creds.token,
                 "refresh_token": creds.refresh_token,
@@ -68,19 +79,19 @@ def get_google_sheets_service():
 
 # --- Novos helpers reutilizando as mesmas credenciais (não altera fluxo OAuth existente) ---
 def _load_creds_or_redirect():
-    # Ajustado: nunca retornar redirect aqui; helpers devem retornar None quando faltar credenciais
+    # Helpers retornam None quando faltar credenciais
     if not GOOGLE_APIS_AVAILABLE:
         return None
-    if not os.path.exists("oauth_credentials.json"):
+    if not os.path.exists(OAUTH_FILE):
         return None
     try:
-        with open("oauth_credentials.json", "r") as f:
+        with open(OAUTH_FILE, "r") as f:
             creds_data = json.load(f)
         creds = Credentials(**creds_data)
         if creds.expired and creds.refresh_token:
             from google.auth.transport.requests import Request
             creds.refresh(Request())
-            with open("oauth_credentials.json", "w") as f:
+            with open(OAUTH_FILE, "w") as f:
                 json.dump({
                     "token": creds.token,
                     "refresh_token": creds.refresh_token,
@@ -344,13 +355,11 @@ def upload_drive_bytes(nome_arquivo, conteudo_bytes, pasta_id=None, mime_type="a
 def debug_google():
     try:
         info = {"ok": False, "tem_arquivo": False, "scopes": [], "tem_refresh_token": False}
-        import os, json
-        if os.path.exists("oauth_credentials.json"):
+        if os.path.exists(OAUTH_FILE):
             info["tem_arquivo"] = True
-            with open("oauth_credentials.json", "r") as f:
+            with open(OAUTH_FILE, "r") as f:
                 data = json.load(f)
             scopes = data.get("scopes") or []
-            # normaliza
             if isinstance(scopes, str):
                 scopes = scopes.split()
             info["scopes"] = sorted(scopes)
@@ -366,7 +375,7 @@ def authorize():
         return "⚠️ Google APIs não disponíveis. Instale as dependências: pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib"
     
     flow = Flow.from_client_secrets_file(
-        "credentials.json", scopes=SCOPES, redirect_uri=REDIRECT_URI
+        CREDENTIALS_FILE, scopes=SCOPES, redirect_uri=REDIRECT_URI
     )
     # Forçar nova tela de consentimento e não unir escopos previamente concedidos
     authorization_url, state = flow.authorization_url(
@@ -385,7 +394,7 @@ def oauth2callback():
     
     state = session.get("state")
     flow = Flow.from_client_secrets_file(
-        "credentials.json", scopes=SCOPES, state=state, redirect_uri=REDIRECT_URI
+        CREDENTIALS_FILE, scopes=SCOPES, state=state, redirect_uri=REDIRECT_URI
     )
     # Passa escopos explicitamente para ajudar oauthlib a validar/normalizar
     flow.fetch_token(
@@ -402,7 +411,7 @@ def oauth2callback():
         "client_secret": creds.client_secret,
         "scopes": creds.scopes,
     }
-    with open("oauth_credentials.json", "w") as f:
+    with open(OAUTH_FILE, "w") as f:
         json.dump(session["credentials"], f)
     print("✅ Autenticação concluída com sucesso!")
     return "Autenticação concluída. Pode voltar ao app."
