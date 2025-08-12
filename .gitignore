@@ -48,3 +48,8 @@ replacements.txt
 .env
 .env.*
 main.py.example
+
+# Secrets
+.env
+.env.*
+push origin main.example
