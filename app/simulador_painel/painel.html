@@ -294,11 +294,11 @@
 
 // Botão de login Google
 document.getElementById('login-google').onclick = function() {
-    window.open('http://127.0.0.1:5000/authorize', '_blank');
+    window.open(BACKEND_BASE_URL + '/authorize', '_blank');
 };
 
 // TODO: Adicionar aqui a lógica para salvar prompts, atualizar status de debug, etc.
 // A lógica de envio de mensagem foi removida pois não há mais interface de chat.
 </script>
 </body>
-</html>
+</html><script>const BACKEND_BASE_URL = "{{ BACKEND_BASE_URL }}";</script>
