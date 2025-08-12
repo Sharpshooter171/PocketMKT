@@ -43,3 +43,8 @@ sheet_id*.txt
 # patches e lixo local
 *.diff
 replacements.txt
+
+# Secrets
+.env
+.env.*
+main.py.example
