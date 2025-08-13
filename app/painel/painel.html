@@ -154,13 +154,16 @@
   </div>
 
   <script>
-    (function initGoogleBtn(){
-      const btn = document.getElementById('login-google');
-      btn.addEventListener('click', () => {
-        btn.disabled = true; btn.textContent = '⏳ Redirecionando...';
-        window.location.href = 'http://pocketmkt-api.duckdns.org/authorize';
-      });
-    })();
+(function initGoogleBtn(){
+  const btn = document.getElementById('login-google');
+  const url = 'http://pocketmkt-api.duckdns.org/authorize';
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    // Abre em nova aba/guia sem fechar o painel:
+    const w = window.open(url, '_blank', 'noopener');
+    if (w) { w.opener = null; } // segurança extra
+  });
+})();
 
     const debugEl = document.getElementById('debug-console');
     const logs = [];
