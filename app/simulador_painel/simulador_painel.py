@@ -12,7 +12,6 @@ except Exception:
 app = Flask(__name__)
 
 # ===== Config via .env =====
-# Ex.: BACKEND_BASE_URL="http://127.0.0.1:5000"  (seu backend principal)
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://127.0.0.1:5000").rstrip("/")
 PANEL_HOST = os.getenv("PANEL_HOST", "0.0.0.0")
 PANEL_PORT = int(os.getenv("PANEL_PORT", os.getenv("PORT", "8000")))
@@ -20,6 +19,7 @@ PANEL_PORT = int(os.getenv("PANEL_PORT", os.getenv("PORT", "8000")))
 # Endpoints do backend
 PROMPT_CONFIG_URL = f"{BACKEND_BASE_URL}/prompt_config"
 STATUS_URL        = f"{BACKEND_BASE_URL}/status"
+PROCESSAR_URL     = f"{BACKEND_BASE_URL}/processar_atendimento"
 
 # Carrega o HTML do painel
 BASE_DIR = os.path.dirname(__file__)
@@ -39,20 +39,36 @@ def root():
 
 @app.route("/painel")
 def painel():
-    # injeta BACKEND_BASE_URL no HTML (para status e debug)
+    # injeta BACKEND_BASE_URL no HTML (para status, prompt etc.)
     return render_template_string(PANEL_HTML, BACKEND_BASE_URL=BACKEND_BASE_URL)
 
-# Proxy de prompt_config (GET/POST) para o backend (mantido p/ compatibilidade)
+# Proxy de prompt_config (GET/POST) para o backend
 @app.route("/prompt_config", methods=["GET", "POST"])
 def prompt_config_route():
     try:
         if request.method == "GET":
             r = requests.get(PROMPT_CONFIG_URL, timeout=10)
         else:
-            r = requests.post(PROMPT_CONFIG_URL, json=(request.get_json() or {}), timeout=10)
+            r = requests.post(PROMPT_CONFIG_URL, json=(request.get_json() or {}), timeout=15)
         return (r.text, r.status_code, {"Content-Type": r.headers.get("Content-Type", "application/json")})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# (Opcional) Proxy para enviar mensagem ao backend oficial
+@app.route("/enviar", methods=["POST"])
+def enviar():
+    data = request.get_json(force=True) or {}
+    payload = {
+        "mensagem": data.get("mensagem", ""),
+        "numero": data.get("numero"),
+        "tipo_usuario": data.get("tipo_usuario", "cliente"),
+        "escritorio_id": data.get("escritorio_id"),
+    }
+    try:
+        r = requests.post(PROCESSAR_URL, json=payload, timeout=30)
+        return jsonify(r.json()), r.status_code
+    except Exception as e:
+        return jsonify({"erro": "backend_offline", "detalhe": str(e)}), 502
 
 # Status do painel + ping no backend /status (usado pelo front p/ Debug)
 @app.route("/status", methods=["GET"])

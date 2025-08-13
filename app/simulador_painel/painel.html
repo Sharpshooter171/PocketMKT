@@ -2,276 +2,268 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>PocketMKT - Painel (MVP WhatsApp)</title>
+  <title>PocketMKT – Painel (MVP WhatsApp)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     * { box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      margin: 0; padding: 0;
-    }
-    .header {
-      position: fixed; top: 0; left: 0; right: 0;
-      background: #2c3e50; color: white;
-      padding: 16px 24px; z-index: 1000;
-      display: flex; align-items: center; justify-content: space-between;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-    }
-    .header h1 { margin: 0; font-size: 20px; font-weight: 600; }
-    .header .actions { display:flex; align-items:center; gap:12px; }
-    .badge {
-      background: #27ae60; color: white;
-      padding: 6px 10px; border-radius: 16px; font-size: 12px; font-weight: 700;
-    }
-    .container {
-      max-width: 1200px; margin: 0 auto;
-      padding: 96px 18px 24px;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 18px;
-    }
-    .card {
-      background: white; border-radius: 12px;
-      box-shadow: 0 10px 20px rgba(0,0,0,0.06);
-      padding: 18px;
-    }
-    .card h2 {
-      margin: 0 0 10px; font-size: 18px; color: #2c3e50; border-left: 4px solid #3498db; padding-left: 10px;
-    }
-    .lead {
-      font-size: 14px; color: #2c3e50; line-height: 1.55;
-    }
-    .steps { margin-top: 10px; }
-    .step {
-      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
-      padding: 12px; margin-bottom: 10px;
-    }
-    .step strong { color: #0f172a; }
-    .kbd {
-      display: inline-block; padding: 2px 6px; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 6px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 12px; background: #f8fafc; color:#0f172a;
-    }
-
-    /* Debug console grande */
-    .debug-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
-    .btn {
-      border: none; border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer;
-    }
-    .btn-primary { background: #6366f1; color: white; }
-    .btn-secondary { background: #0ea5e9; color: white; }
-    .btn-danger { background: #ef4444; color: white; }
-    .btn-muted { background: #e5e7eb; color: #111827; }
-
-    .debug-status { font-size: 13px; margin-bottom: 8px; }
-    .debug-console {
-      height: 420px; /* MAIOR */
-      width: 100%;
-      background: #0b1220; color: #e5e7eb;
-      padding: 12px; border-radius: 10px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 12px;
-      border: 1px solid #1f2937;
-    }
-    .debug-line { margin-bottom: 6px; white-space: pre-wrap; word-break: break-word; }
-    .muted { color:#9ca3af; }
-
-    /* Painel lateral menor */
-    .side-card .row { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:13px; }
-    .side-card .row span.value { font-weight:700; color:#111827; }
-
-    /* Botão Google */
-    #login-google {
-      padding: 8px 14px; background: #e67e22; color: white; border: none; border-radius: 8px;
-      font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
-    }
-    #login-google[disabled] { opacity: 0.7; cursor: default; }
-
-    @media (max-width: 980px) {
-      .grid { grid-template-columns: 1fr; }
-    }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: #f0f2f7; margin: 0; }
+    .header { position: sticky; top: 0; z-index: 10; background:#2c3e50; color:#fff; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 10px rgba(0,0,0,.06) }
+    .header h1 { margin:0; font-size:18px; font-weight:700 }
+    .actions { display:flex; align-items:center; gap:10px }
+    .badge { background:#27ae60; color:#fff; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800 }
+    #login-google { padding:8px 14px; background:#e67e22; color:#fff; border:0; border-radius:10px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px }
+    #login-google[disabled]{ opacity:.75; cursor:default }
+    .container { max-width:1280px; margin:0 auto; padding:18px }
+    .grid { display:grid; grid-template-columns: 1.2fr 1fr; gap:18px }
+    @media (max-width: 1000px){ .grid{ grid-template-columns: 1fr } }
+    .card { background:#fff; border-radius:14px; box-shadow:0 10px 20px rgba(0,0,0,.06); padding:18px }
+    .card h2 { margin:0 0 10px; font-size:18px; color:#1f2937; border-left:4px solid #3498db; padding-left:10px }
+    .lead { color:#111827; font-size:14px; line-height:1.55 }
+    .steps { margin-top:10px }
+    .step { background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin-bottom:10px; font-size:14px; color:#1f2937 }
+    .kbd { display:inline-block; padding:2px 6px; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size:12px; background:#f8fafc; color:#0f172a }
+    /* Side panel */
+    .panel-section { margin-bottom:16px; background:#fff; border-radius:12px; border:1px solid #e5e7eb; }
+    .panel-section > .head { padding:12px 14px; border-bottom:1px solid #e5e7eb; font-weight:800; color:#1f2937; background:#f9fafb; border-radius:12px 12px 0 0 }
+    .panel-section .body { padding:12px 14px }
+    .row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:6px 0 }
+    .row label { font-size:13px; color:#111827; flex:1 }
+    .row input[type="checkbox"]{ transform: scale(1.15); }
+    .status-dot { width:10px; height:10px; border-radius:50% }
+    .on { background:#10b981 }
+    .off { background:#ef4444 }
+    textarea,input,button,select { font: inherit }
+    textarea { width:100%; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical }
+    .btn { border:0; border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer }
+    .btn-primary { background:#6366f1; color:#fff }
+    .btn-secondary { background:#0ea5e9; color:#fff }
+    .btn-muted { background:#e5e7eb; color:#111827 }
+    /* Debug */
+    .debug-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px }
+    .debug-status { font-size:13px; margin-bottom:8px }
+    .debug-console { height:420px; background:#0b1220; color:#e5e7eb; padding:12px; border-radius:12px; overflow-y:auto; font-family: ui-monospace, monospace; font-size:12px; border:1px solid #1f2937 }
+    .debug-line { margin-bottom:6px; white-space: pre-wrap; word-break: break-word }
+    .muted { color:#6b7280 }
   </style>
-
-  <!-- Backend base URL injetada pelo servidor do painel -->
-  <script>
-    const BACKEND_BASE_URL = "{{ BACKEND_BASE_URL }}";
-  </script>
+  <script>const BACKEND_BASE_URL = "{{ BACKEND_BASE_URL }}";</script>
 </head>
 <body>
   <div class="header">
     <h1>⚖️ PocketMKT – Painel (MVP WhatsApp)</h1>
     <div class="actions">
-      <span id="role-badge" class="badge">MODO MVP • WhatsApp + Twilio</span>
+      <span class="badge">MODO MVP • WhatsApp + Twilio</span>
       <button id="login-google"><span style="font-size:18px;">🔐</span> Conectar Google</button>
     </div>
   </div>
 
   <div class="container">
     <div class="grid">
-      <!-- Coluna principal: instruções (entrou no lugar do antigo chat) -->
+      <!-- ESQUERDA: Instruções -->
       <div class="card">
         <h2>📘 Como testar o MVP (WhatsApp + Twilio)</h2>
-        <p class="lead">
-          Este painel não simula mais chat. O fluxo oficial é pelo WhatsApp, via Twilio. Siga os passos abaixo para validar ponta‑a‑ponta.
-        </p>
+        <p class="lead">Este painel não simula mais chat. O fluxo oficial é pelo WhatsApp (Twilio). Use as seções à direita para configurar e testar.</p>
         <div class="steps">
-          <div class="step">
-            <strong>1) Conecte seu Google (Sheets/Calendar/Gmail)</strong><br/>
-            Use o botão <span class="kbd">Conectar Google</span> no topo. Em alguns ambientes, ele pode redirecionar para seu domínio
-            com autenticação. Após autenticar, volte a esta página.
-          </div>
-          <div class="step">
-            <strong>2) Verifique o Backend</strong><br/>
-            Clique em <span class="kbd">Atualizar Debug</span> no bloco de Debug à direita. Você deverá ver o status do
-            <em>backend</em>, LLM e integrações do Google.
-          </div>
-          <div class="step">
-            <strong>3) Teste pelo WhatsApp (Twilio)</strong><br/>
-            Envie uma mensagem inicial (saudação simples) para o número/sandbox configurado no Twilio. O backend irá
-            processar a conversa e registrar eventos que você pode acompanhar no Debug.
-          </div>
-          <div class="step">
-            <strong>4) Coleta de evidências</strong><br/>
-            Use <span class="kbd">Exportar Debug</span> para baixar um arquivo <code>.json</code> com todos os logs coletados
-            nesta sessão de testes.
-          </div>
-          <div class="step">
-            <strong>Dicas</strong><br/>
-            • Sempre comece com uma saudação (ex.: “Olá, tudo bem?”).<br/>
-            • Para acelerar a triagem, inclua: nome completo, motivo do contato e preferência de horário.<br/>
-            • Erros intermitentes de autenticação Google geralmente se resolvem refazendo o login e voltando ao painel.
-          </div>
+          <div class="step"><strong>1) Conectar Google</strong><br/>Clique em <span class="kbd">Conectar Google</span>. Ao finalizar, volte para o painel.</div>
+          <div class="step"><strong>2) Status</strong><br/>Em <span class="kbd">Debug</span>, use <em>Atualizar</em> para ver o estado do backend, Google e LLM.</div>
+          <div class="step"><strong>3) WhatsApp</strong><br/>Envie uma saudação para o número/sandbox do Twilio. Acompanhe os eventos no Debug.</div>
+          <div class="step"><strong>4) Evidências</strong><br/>Use <em>Exportar Debug</em> para baixar um <code>.json</code> com todos os logs desta sessão.</div>
         </div>
       </div>
 
-      <!-- Coluna lateral: Debug ampliado e painéis auxiliares -->
-      <div class="card side-card">
-        <h2>🐞 Debugging & Integrações</h2>
-        <div class="debug-toolbar">
-          <button class="btn btn-primary" id="btn-debug-refresh">🔄 Atualizar Debug</button>
-          <button class="btn btn-secondary" id="btn-export">⬇️ Exportar Debug</button>
-          <button class="btn btn-muted" id="btn-clear">🧹 Limpar Console</button>
-          <label class="muted"><input type="checkbox" id="auto-poll" checked /> Auto atualizar (a cada 10s)</label>
+      <!-- DIREITA: Toggles + Prompt + Debug -->
+      <div>
+        <!-- Prompt -->
+        <div class="panel-section">
+          <div class="head">📝 Prompt Configuração</div>
+          <div class="body">
+            <label for="prompt-system" class="muted">System Prompt:</label>
+            <textarea id="prompt-system" rows="6"></textarea>
+            <label for="prompt-free" class="muted" style="margin-top:10px; display:block;">Free Prompt:</label>
+            <textarea id="prompt-free" rows="4"></textarea>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button id="save-prompt" class="btn btn-primary" style="flex:1;">Salvar Prompt</button>
+              <button id="reload-prompt" class="btn btn-muted">Recarregar</button>
+            </div>
+            <div id="prompt-status" class="muted" style="display:none; margin-top:6px;">✅ Prompt salvo!</div>
+          </div>
         </div>
-        <div class="debug-status">
-          Backend: <span id="debug-backend-status" class="muted">checando...</span> •
-          Google: <span id="debug-google" class="muted">—</span> •
-          LLM: <span id="debug-llm" class="muted">—</span>
+
+        <!-- Funções do Advogado -->
+        <div class="panel-section">
+          <div class="head">👨‍⚖️ Funções do Advogado</div>
+          <div class="body" id="toggles-adv">
+            <div class="row"><input type="checkbox" id="func_onboarding" checked><label for="func_onboarding">Onboarding Completo</label><div class="status-dot on" data-dot="func_onboarding"></div></div>
+            <div class="row"><input type="checkbox" id="func_onboarding_completo" checked><label for="func_onboarding_completo">Onboarding + Planilha/Email</label><div class="status-dot on" data-dot="func_onboarding_completo"></div></div>
+            <div class="row"><input type="checkbox" id="func_planilhas" checked><label for="func_planilhas">Criação de Planilhas</label><div class="status-dot on" data-dot="func_planilhas"></div></div>
+            <div class="row"><input type="checkbox" id="func_email" checked><label for="func_email">Notificações Email</label><div class="status-dot on" data-dot="func_email"></div></div>
+            <div class="row"><input type="checkbox" id="func_prazos" checked><label for="func_prazos">Verificação de Prazos</label><div class="status-dot on" data-dot="func_prazos"></div></div>
+            <div class="row"><input type="checkbox" id="func_documentos" checked><label for="func_documentos">Gestão Documentos</label><div class="status-dot on" data-dot="func_documentos"></div></div>
+            <div class="row"><input type="checkbox" id="func_honorarios" checked><label for="func_honorarios">Gestão Honorários</label><div class="status-dot on" data-dot="func_honorarios"></div></div>
+            <div class="row"><input type="checkbox" id="func_diario" checked><label for="func_diario">Consulta Diário</label><div class="status-dot on" data-dot="func_diario"></div></div>
+            <div class="row"><input type="checkbox" id="func_resumos" checked><label for="func_resumos">Resumos/Estatísticas</label><div class="status-dot on" data-dot="func_resumos"></div></div>
+            <div class="row"><input type="checkbox" id="func_relatorio_geral" checked><label for="func_relatorio_geral">Relatório Geral</label><div class="status-dot on" data-dot="func_relatorio_geral"></div></div>
+            <div class="row"><input type="checkbox" id="func_relatorio_casos" checked><label for="func_relatorio_casos">Relatório Casos</label><div class="status-dot on" data-dot="func_relatorio_casos"></div></div>
+            <div class="row"><input type="checkbox" id="func_relatorio_honorarios" checked><label for="func_relatorio_honorarios">Relatório Honorários</label><div class="status-dot on" data-dot="func_relatorio_honorarios"></div></div>
+            <div class="row"><input type="checkbox" id="func_resumo_pre_encontro" checked><label for="func_resumo_pre_encontro">Resumo Pré-Encontro</label><div class="status-dot on" data-dot="func_resumo_pre_encontro"></div></div>
+            <div class="row"><input type="checkbox" id="func_preparar_audiencia" checked><label for="func_preparar_audiencia">Preparar Audiência</label><div class="status-dot on" data-dot="func_preparar_audiencia"></div></div>
+            <div class="row"><input type="checkbox" id="func_enviar_resumo_email" checked><label for="func_enviar_resumo_email">Enviar Resumo por Email</label><div class="status-dot on" data-dot="func_enviar_resumo_email"></div></div>
+            <div class="row"><input type="checkbox" id="func_verificar_notificacoes" checked><label for="func_verificar_notificacoes">Verificar Notificações</label><div class="status-dot on" data-dot="func_verificar_notificacoes"></div></div>
+            <div class="row"><input type="checkbox" id="func_alterar_agendamento" checked><label for="func_alterar_agendamento">Alterar Agendamento</label><div class="status-dot on" data-dot="func_alterar_agendamento"></div></div>
+            <div class="row"><input type="checkbox" id="func_cancelar_agendamento" checked><label for="func_cancelar_agendamento">Cancelar Agendamento</label><div class="status-dot on" data-dot="func_cancelar_agendamento"></div></div>
+          </div>
         </div>
-        <div id="debug-console" class="debug-console" aria-label="Console de debug" role="log"></div>
+
+        <!-- Funções do Cliente -->
+        <div class="panel-section">
+          <div class="head">👥 Funções do Cliente</div>
+          <div class="body" id="toggles-cli">
+            <div class="row"><input type="checkbox" id="func_relato_casos" checked><label for="func_relato_casos">Relato de Casos</label><div class="status-dot on" data-dot="func_relato_casos"></div></div>
+            <div class="row"><input type="checkbox" id="func_transcricao" checked><label for="func_transcricao">Transcrição Áudio</label><div class="status-dot on" data-dot="func_transcricao"></div></div>
+            <div class="row"><input type="checkbox" id="func_agendamento" checked><label for="func_agendamento">Agendamento</label><div class="status-dot on" data-dot="func_agendamento"></div></div>
+            <div class="row"><input type="checkbox" id="func_status" checked><label for="func_status">Status Conversa</label><div class="status-dot on" data-dot="func_status"></div></div>
+            <div class="row"><input type="checkbox" id="func_extrair_infos" checked><label for="func_extrair_infos">Extração de Informações</label><div class="status-dot on" data-dot="func_extrair_infos"></div></div>
+          </div>
+        </div>
+
+        <!-- Debug -->
+        <div class="panel-section">
+          <div class="head">🐞 Debugging & Integrações</div>
+          <div class="body">
+            <div class="debug-toolbar">
+              <button class="btn btn-primary" id="btn-debug-refresh">🔄 Atualizar</button>
+              <button class="btn btn-secondary" id="btn-export">⬇️ Exportar Debug</button>
+              <button class="btn btn-muted" id="btn-clear">🧹 Limpar</button>
+              <label class="muted" style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="auto-poll" checked/> Auto (10s)</label>
+            </div>
+            <div class="debug-status">
+              Backend: <span id="st-backend" class="muted">—</span> •
+              Google: <span id="st-google" class="muted">—</span> •
+              LLM: <span id="st-llm" class="muted">—</span>
+            </div>
+            <div id="debug-console" class="debug-console" role="log" aria-label="Console de debug"></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Cartão menor com info técnica -->
-    <div class="card" style="margin-top:18px;">
-      <h2>⚙️ Configurações Rápidas</h2>
-      <div class="row"><span>BACKEND_BASE_URL:</span> <span id="row-backend" class="value">—</span></div>
-      <div class="row"><span>Painel Atual:</span> <span class="value" id="row-location">—</span></div>
+    <!-- Infos -->
+    <div class="card" style="margin-top:12px;">
+      <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:13px;">
+        <div>BACKEND_BASE_URL: <strong id="row-backend">—</strong></div>
+        <div>Painel: <strong id="row-location">—</strong></div>
+      </div>
     </div>
   </div>
 
   <script>
-    // ====== Botão Google ======
-    (function initGoogleBtn() {
+    // ===== Google Auth (URL fixa) =====
+    (function initGoogleBtn(){
       const btn = document.getElementById('login-google');
-
-      function setStateIdle() {
-        btn.innerHTML = '<span style="font-size:18px;">🔐</span> Conectar Google';
-        btn.disabled = false;
-      }
-      function setStateLoading() {
-        btn.textContent = '⏳ Redirecionando...';
-        btn.disabled = true;
-      }
-
       btn.addEventListener('click', () => {
-        setStateLoading();
-        // Pedido: apontar para https://pocketmkt-panel.duckdns.org/painel
-        // (seu Nginx/Backend deve redirecionar para o fluxo de OAuth quando necessário)
-        window.location.href = 'https://pocketmkt-panel.duckdns.org/painel';
+        btn.disabled = true; btn.textContent = '⏳ Redirecionando...';
+        window.location.href = 'http://pocketmkt-api.duckdns.org/authorize';
       });
-
-      setStateIdle();
     })();
 
-    // ====== Debug Console ======
-    const debugConsoleEl = document.getElementById('debug-console');
-    const logs = []; // memória da sessão (exportável)
-
+    // ===== Debug Console =====
+    const debugEl = document.getElementById('debug-console');
+    const logs = [];
     function addLog(obj) {
-      const entry = {
-        t: new Date().toISOString(),
-        ...obj
-      };
+      const entry = { t: new Date().toISOString(), ...obj };
       logs.push(entry);
-      const line = document.createElement('div');
-      line.className = 'debug-line';
-      line.textContent = JSON.stringify(entry, null, 0);
-      debugConsoleEl.appendChild(line);
-      debugConsoleEl.scrollTop = debugConsoleEl.scrollHeight;
+      const line = document.createElement('div'); line.className = 'debug-line';
+      line.textContent = JSON.stringify(entry);
+      debugEl.appendChild(line); debugEl.scrollTop = debugEl.scrollHeight;
     }
-
-    async function fetchStatus() {
-      try {
-        const res = await fetch(`${BACKEND_BASE_URL}/status`, { credentials: 'omit' });
-        const json = await res.json().catch(() => ({}));
-        // Atualiza status sintético
-        const googleOk = json.google_oauth === true ||
-                         (json.backend_status && json.backend_status.google_oauth === true);
-        const llm = (json.backend_status && json.backend_status.llm) || json.llm || 'desconhecido';
-        document.getElementById('debug-backend-status').textContent =
-          res.ok ? 'ONLINE' : `ERRO HTTP ${res.status}`;
-        document.getElementById('debug-google').textContent = googleOk ? 'Autenticado' : 'Desconectado';
-        document.getElementById('debug-llm').textContent = typeof llm === 'string' ? llm : JSON.stringify(llm);
-
-        addLog({ type: 'status', ok: res.ok, body: json });
-      } catch (e) {
-        document.getElementById('debug-backend-status').textContent = 'OFFLINE';
-        document.getElementById('debug-google').textContent = '—';
-        document.getElementById('debug-llm').textContent = '—';
-        addLog({ type: 'status_error', error: String(e) });
+    async function fetchStatus(){
+      try{
+        const r = await fetch(`${BACKEND_BASE_URL}/status`, { credentials: 'omit' });
+        const j = await r.json().catch(()=>({}));
+        document.getElementById('st-backend').textContent = r.ok ? 'ONLINE' : `HTTP ${r.status}`;
+        const googleOk = j.google_oauth === true || (j.backend_status && j.backend_status.google_oauth === true);
+        document.getElementById('st-google').textContent = googleOk ? 'Autenticado' : 'Desconectado';
+        const llm = (j.backend_status && j.backend_status.llm) || j.llm || 'desconhecido';
+        document.getElementById('st-llm').textContent = typeof llm === 'string' ? llm : JSON.stringify(llm);
+        addLog({ type:'status', ok:r.ok, body:j });
+      }catch(e){
+        document.getElementById('st-backend').textContent = 'OFFLINE';
+        document.getElementById('st-google').textContent = '—';
+        document.getElementById('st-llm').textContent = '—';
+        addLog({ type:'status_error', error:String(e) });
       }
     }
-
-    // Botões debug
     document.getElementById('btn-debug-refresh').addEventListener('click', fetchStatus);
-    document.getElementById('btn-clear').addEventListener('click', () => {
-      logs.length = 0;
-      debugConsoleEl.innerHTML = '';
-      addLog({ type: 'console_cleared' });
+    document.getElementById('btn-clear').addEventListener('click', ()=>{ logs.length=0; debugEl.innerHTML=''; addLog({type:'console_cleared'}) });
+    document.getElementById('btn-export').addEventListener('click', ()=>{
+      const blob = new Blob([JSON.stringify({ exported_at:new Date().toISOString(), logs }, null, 2)], { type:'application/json' });
+      const url = URL.createObjectURL(blob); const a=document.createElement('a');
+      a.href=url; a.download=`pocketmkt-debug-${new Date().toISOString().replaceAll(':','-')}.json`; a.click(); URL.revokeObjectURL(url);
+      addLog({ type:'export', count: logs.length });
     });
-    document.getElementById('btn-export').addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), logs }, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const ts = new Date().toISOString().replaceAll(':','-');
-      a.href = url;
-      a.download = `pocketmkt-debug-${ts}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      addLog({ type: 'export', count: logs.length });
-    });
+    // Auto-poll
+    const autoPoll = document.getElementById('auto-poll'); let poll=null;
+    function startPoll(){ stopPoll(); poll=setInterval(fetchStatus, 10000) }
+    function stopPoll(){ if(poll){ clearInterval(poll); poll=null } }
+    autoPoll.addEventListener('change', ()=> autoPoll.checked ? startPoll() : stopPoll());
 
-    // Auto-poll status
-    const autoPoll = document.getElementById('auto-poll');
-    let pollTimer = null;
-    function startPoll() {
-      stopPoll();
-      pollTimer = setInterval(fetchStatus, 10000);
+    // ===== Toggles (persistência local) =====
+    const toggleIds = [
+      'func_onboarding','func_onboarding_completo','func_planilhas','func_email','func_prazos','func_documentos','func_honorarios','func_diario',
+      'func_resumos','func_relatorio_geral','func_relatorio_casos','func_relatorio_honorarios','func_resumo_pre_encontro','func_preparar_audiencia',
+      'func_enviar_resumo_email','func_verificar_notificacoes','func_alterar_agendamento','func_cancelar_agendamento',
+      'func_relato_casos','func_transcricao','func_agendamento','func_status','func_extrair_infos'
+    ];
+    function applyDot(id, on){ const dot=document.querySelector(`.status-dot[data-dot="${id}"]`); if(!dot) return; dot.classList.toggle('on', on); dot.classList.toggle('off', !on); }
+    function loadToggles(){
+      toggleIds.forEach(id=>{
+        const el=document.getElementById(id); if(!el) return;
+        const saved=localStorage.getItem('toggle.'+id);
+        if(saved!==null){ el.checked = saved==='1' }
+        applyDot(id, el.checked);
+        el.addEventListener('change', ()=>{
+          localStorage.setItem('toggle.'+id, el.checked ? '1':'0');
+          applyDot(id, el.checked);
+          addLog({ type:'toggle', id, enabled: el.checked });
+        });
+      });
     }
-    function stopPoll() {
-      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    }
-    autoPoll.addEventListener('change', () => {
-      if (autoPoll.checked) startPoll(); else stopPoll();
-    });
 
-    // Infos rápidas
+    // ===== Prompt Config (GET/POST) =====
+    async function loadPrompt(){
+      try{
+        const r = await fetch(`${BACKEND_BASE_URL}/prompt_config`, { method:'GET' });
+        const j = await r.json().catch(()=>({}));
+        document.getElementById('prompt-system').value = j.system_prompt || '';
+        document.getElementById('prompt-free').value   = j.free_prompt || '';
+        addLog({ type:'prompt_get_ok' });
+      }catch(e){
+        addLog({ type:'prompt_get_err', error:String(e) });
+      }
+    }
+    async function savePrompt(){
+      try{
+        const payload = {
+          system_prompt: document.getElementById('prompt-system').value,
+          free_prompt: document.getElementById('prompt-free').value
+        };
+        const r = await fetch(`${BACKEND_BASE_URL}/prompt_config`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const ok = r.ok;
+        document.getElementById('prompt-status').style.display = ok ? 'block' : 'none';
+        addLog({ type:'prompt_save', ok });
+      }catch(e){
+        addLog({ type:'prompt_save_err', error:String(e) });
+      }
+    }
+    document.getElementById('save-prompt').addEventListener('click', savePrompt);
+    document.getElementById('reload-prompt').addEventListener('click', loadPrompt);
+
+    // Infos
     document.getElementById('row-backend').textContent = BACKEND_BASE_URL || 'N/D';
     document.getElementById('row-location').textContent = window.location.href;
 
-    // Primeira carga:
+    // Inicialização
+    loadToggles();
+    loadPrompt();
     fetchStatus();
     startPoll();
   </script>
