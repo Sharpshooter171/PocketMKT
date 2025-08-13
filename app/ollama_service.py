@@ -1,71 +1,80 @@
+# app/ollama_service.py
+"""
+Cliente HTTP para chamar a LLM no servidor da GPU.
+- Produção (CPU->GPU na VPC): use IP PRIVADO 172.31.18.20
+- Testes do notebook (internet -> GPU): use IP PÚBLICO 98.87.41.241 (libere 8000 para seu IP)
+Config por ambiente:
+  LLM_HOST (default: 172.31.18.20)
+  LLM_PORT (default: 8000)
+  LLM_ROUTE (default: /infer)
+  LLM_BASE_URL (opcional: substitui host:port de uma vez, ex.: http://98.87.41.241:8000)
+"""
+
+import os
 import requests
-from app.prompt_config import prompt_config
+from typing import Any, Dict, Optional
 
-print("🧠 Carregando serviço de integração com Ollama...")
+# Carrega host/porta/rota
+HOST = os.getenv("LLM_HOST", "172.31.18.20")   # PRIVADO (produção)
+PORT = os.getenv("LLM_PORT", "8000")
+ROUTE = os.getenv("LLM_ROUTE", "/infer")
 
-OLLAMA_API_URL = "http://3.92.70.163:8000/infer"
+# Se LLM_BASE_URL estiver definido, ele prevalece sobre HOST/PORT
+BASE = os.getenv("LLM_BASE_URL", f"http://{HOST}:{PORT}")
+OLLAMA_API_URL = f"{BASE}{ROUTE}"
 
+# Sessão com keep-alive
+SESSION = requests.Session()
+SESSION.headers.update({"Content-Type": "application/json"})
 
-def get_llama_response(client_message, system_prompt=None, contexto_cliente=None):
-    print("🧠 Chamando get_llama_response()...")
+def health(timeout: tuple[int, int] = (2, 5)) -> Dict[str, Any]:
+    """Ping simples do servidor (espera /health; se não existir, retorna ok pelo status)."""
+    url = f"{BASE}/health"
     try:
-        if system_prompt is None:
-            system_prompt = prompt_config['system_prompt']
-        contexto = ""
-        if contexto_cliente:
-            contexto = (
-                f"\n\n[Contexto do cliente]\n"
-                f"Nome: {contexto_cliente.get('nome','')}\n"
-                f"Necessidade: {contexto_cliente.get('necessidade','')}\n"
-                f"Preferência: {contexto_cliente.get('preferencia_horario','')}\n"
-            )
-        full_prompt = f"{system_prompt}{contexto}\nUsuário: {client_message}\nAtendente:"
-        print("📨 PROMPT COMPLETO ENVIADO:")
-        print(full_prompt)
-        response = requests.post(OLLAMA_API_URL, json={
-            "model": "mistral-7b-instruct-v0.2-advocacia",
-            "prompt": full_prompt,
-            "stream": False
-        }, timeout=90)
-        if response.status_code != 200:
-            print(f"❌ ERRO HTTP {response.status_code}: {response.text}")
-            return "Erro ao obter resposta da IA."
-        try:
-            full_response = response.json().get("response", "Desculpe, não consegui entender.")
-            if not isinstance(full_response, str):
-                full_response = str(full_response)
-        except Exception as e:
-            print(f"❌ Erro ao processar resposta JSON: {e}")
-            return "Erro ao processar resposta da IA."
-        print("✅ RESPOSTA COMPLETA DA IA:")
-        print(full_response)
-        return full_response  # <--- NÃO use truncate_response aqui!
-    except Exception as e:
-        print("❌ ERRO AO CHAMAR OLLAMA:", e)
-        return "Erro ao processar a resposta da IA."
+        r = SESSION.get(url, timeout=timeout)
+        if r.ok:
+            try:
+                return r.json()
+            except Exception:
+                return {"ok": True, "status_code": r.status_code}
+        r.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Falha no healthcheck em {url}: {e}") from e
 
-# 🔎 Classificação de intenção (rótulos fechados, saída 1 rótulo)
-def classify_intent_llm(texto: str) -> str:
-    """Retorna um rótulo dentre:
-    relato_caso | agendar_consulta_cliente | enviar_documento_cliente | consulta_andamento_cliente | outro
-    """
-    import requests
+def infer_llm(
+    prompt: str,
+    system: str = "",
+    max_tokens: int = 256,
+    temperature: float = 0.2,
+    extra: Optional[Dict[str, Any]] = None,
+    timeout_connect: int = 5,
+    timeout_read: int = 60,
+) -> Dict[str, Any]:
+    """Chama a rota /infer da LLM."""
+    payload: Dict[str, Any] = {
+        "prompt": prompt,
+        "system": system,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if extra:
+        payload.update(extra)
+
     try:
-        system = (
-            "Você é um classificador. Responda APENAS um rótulo exato, em minúsculas, "
-            "entre: relato_caso | agendar_consulta_cliente | enviar_documento_cliente | consulta_andamento_cliente | outro. "
-            "Sem explicações, sem texto adicional."
-        )
-        prompt = f"{system}\n\nMENSAGEM: {texto}\nRÓTULO:"
-        payload = {"model": "mistral-7b-instruct-v0.2-advocacia", "prompt": prompt, "stream": False}
-        resp = requests.post(OLLAMA_API_URL, json=payload, timeout=45)
-        if resp.status_code != 200:
-            print(f"❌ classify_intent_llm HTTP {resp.status_code}: {resp.text}")
-            return "outro"
-        out = (resp.json().get("response") or "").strip().split()[0].lower()
-        return out if out in {
-            "relato_caso","agendar_consulta_cliente","enviar_documento_cliente","consulta_andamento_cliente","outro"
-        } else "outro"
-    except Exception as e:
-        print("❌ classify_intent_llm erro:", e)
-        return "outro"
+        r = SESSION.post(OLLAMA_API_URL, json=payload, timeout=(timeout_connect, timeout_read))
+        r.raise_for_status()
+        return r.json()
+    except requests.exceptions.ConnectTimeout as e:
+        raise RuntimeError(
+            f"Timeout ao conectar em {OLLAMA_API_URL}. "
+            f"Verifique SG da GPU (porta 8000), HOST={HOST}, se o serviço está em 0.0.0.0:{PORT}."
+        ) from e
+    except requests.exceptions.ReadTimeout as e:
+        raise RuntimeError(
+            f"Conectou mas não respondeu a tempo (read timeout) em {OLLAMA_API_URL}. "
+            f"Verifique logs da LLM/latência."
+        ) from e
+    except requests.exceptions.ConnectionError as e:
+        raise RuntimeError(
+            f"Erro de conexão com {OLLAMA_API_URL}. Verifique rota, DNS, serviço e rede."
+        ) from e
