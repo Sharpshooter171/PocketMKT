@@ -2,6 +2,10 @@ from flask import Flask
 from flask_cors import CORS
 import os
 
+from dotenv import load_dotenv
+load_dotenv()  # antes dos imports que usam as envs
+
+
 # Imports dos blueprints/serviços
 try:
     from app.routes.atendimento import atendimento_bp  # caminho atual do blueprint

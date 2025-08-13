@@ -2,7 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>PocketMKT - Painel do Advogado</title>
+  <title>PocketMKT - Painel (MVP WhatsApp)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     * { box-sizing: border-box; }
     body {
@@ -10,42 +11,86 @@
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       margin: 0; padding: 0;
     }
-    .container { display:flex; flex-direction:row; min-height:100vh; max-width:1400px; margin:0 auto; background:#fff; box-shadow:0 0 20px rgba(0,0,0,0.08); }
-    .header { position:fixed; top:0; left:0; right:0; background:#2c3e50; color:white; padding:18px 28px; z-index:1000; box-shadow:0 2px 10px rgba(0,0,0,0.08); display:flex; align-items:center; justify-content:space-between; }
-    .header h1 { margin:0; font-size:24px; }
-    .user-type-selector select { padding:8px 14px; border:2px solid #2980b9; border-radius:8px; background:#3498db; color:white; font-size:14px; font-weight:bold; cursor:pointer; }
-    .user-role-indicator { margin-left:24px; background:#27ae60; color:white; padding:8px 15px; border-radius:20px; font-size:12px; font-weight:bold; }
-    .user-role-indicator.cliente { background:#3498db; }
-    .user-role-indicator.advogado { background:#e74c3c; }
-    .main-content { display:flex; flex-direction:row; width:100%; margin-top:70px; }
-    .control-panel { width:340px; background:#f6f8fa; padding:18px 14px 18px 18px; border-right:1.5px solid #e0e6ed; overflow-y:auto; }
-    .panel-section { margin-bottom:22px; background:white; padding:15px 12px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.06); }
-    .panel-section h3 { margin:0 0 12px 0; color:#2c3e50; font-size:15px; border-bottom:2px solid #3498db; padding-bottom:4px; }
-    .function-toggle { display:flex; align-items:center; margin:7px 0; padding:7px 0; }
-    .function-toggle input[type="checkbox"] { margin-right:10px; transform:scale(1.15); }
-    .function-toggle label { cursor:pointer; font-size:13px; color:#2c3e50; flex:1; }
-    .status-indicator { width:10px; height:10px; border-radius:50%; margin-left:10px; }
-    .status-on { background:#27ae60; }
-    .status-off { background:#e74c3c; }
-    .chat-container { flex:1 1 0%; display:flex; flex-direction:column; background:#fff; min-width:0; min-height:100vh; }
-    .chat-header { background:#3498db; color:white; padding:15px 20px; font-weight:bold; }
-    .status-bar { background:#2980b9; color:white; padding:8px 20px; font-size:12px; }
-    #chat { flex:1; padding:20px; overflow-y:auto; background:#f8f9fa; }
-    .msg { margin:15px 0; padding:12px 16px; border-radius:18px; max-width:80%; word-wrap:break-word; }
-    .user-msg { background:#007bff; color:white; margin-left:auto; border-bottom-right-radius:5px; }
-    .bot-msg { background:#e9ecef; color:#333; border-bottom-left-radius:5px; }
-    .msg-sender { font-weight:bold; font-size:12px; margin-bottom:5px; }
-    .input-area { display:flex; padding:20px; background:white; border-top:1px solid #dee2e6; }
-    #message { flex:1; padding:12px 16px; border:2px solid #dee2e6; border-radius:25px; font-size:14px; outline:none; }
-    #message:focus { border-color:#007bff; }
-    #send { margin-left:10px; padding:12px 20px; background:#007bff; color:white; border:none; border-radius:25px; cursor:pointer; font-weight:bold; transition:background 0.3s; }
-    #send:hover { background:#0056b3; }
-    #send:disabled { background:#6c757d; cursor:not-allowed; }
-    .quick-actions { display:flex; flex-wrap:wrap; gap:5px; padding:10px 20px; background:#f8f9fa; }
-    .quick-action { padding:5px 10px; background:#6c757d; color:white; border:none; border-radius:15px; font-size:11px; cursor:pointer; transition:background 0.3s; }
-    .quick-action:hover { background:#495057; }
-    @media (max-width:900px){ .container{flex-direction:column; min-height:unset;} .main-content{flex-direction:column; margin-top:80px; min-height:unset;} .control-panel{width:100%; max-width:100vw; min-width:0; border-right:none; border-bottom:1.5px solid #e0e6ed; box-shadow:none; border-radius:0;} .chat-container{border-radius:0 0 16px 16px; min-height:60vh;} }
-    @media (max-width:600px){ .container{margin:0; max-width:100vw;} .main-content{margin-top:60px;} .chat-container{min-height:50vh;} }
+    .header {
+      position: fixed; top: 0; left: 0; right: 0;
+      background: #2c3e50; color: white;
+      padding: 16px 24px; z-index: 1000;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+    .header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    .header .actions { display:flex; align-items:center; gap:12px; }
+    .badge {
+      background: #27ae60; color: white;
+      padding: 6px 10px; border-radius: 16px; font-size: 12px; font-weight: 700;
+    }
+    .container {
+      max-width: 1200px; margin: 0 auto;
+      padding: 96px 18px 24px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 18px;
+    }
+    .card {
+      background: white; border-radius: 12px;
+      box-shadow: 0 10px 20px rgba(0,0,0,0.06);
+      padding: 18px;
+    }
+    .card h2 {
+      margin: 0 0 10px; font-size: 18px; color: #2c3e50; border-left: 4px solid #3498db; padding-left: 10px;
+    }
+    .lead {
+      font-size: 14px; color: #2c3e50; line-height: 1.55;
+    }
+    .steps { margin-top: 10px; }
+    .step {
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+      padding: 12px; margin-bottom: 10px;
+    }
+    .step strong { color: #0f172a; }
+    .kbd {
+      display: inline-block; padding: 2px 6px; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px; background: #f8fafc; color:#0f172a;
+    }
+
+    /* Debug console grande */
+    .debug-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .btn {
+      border: none; border-radius: 8px; padding: 8px 12px; font-weight: 700; cursor: pointer;
+    }
+    .btn-primary { background: #6366f1; color: white; }
+    .btn-secondary { background: #0ea5e9; color: white; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-muted { background: #e5e7eb; color: #111827; }
+
+    .debug-status { font-size: 13px; margin-bottom: 8px; }
+    .debug-console {
+      height: 420px; /* MAIOR */
+      width: 100%;
+      background: #0b1220; color: #e5e7eb;
+      padding: 12px; border-radius: 10px; overflow-y: auto; font-family: ui-monospace, monospace; font-size: 12px;
+      border: 1px solid #1f2937;
+    }
+    .debug-line { margin-bottom: 6px; white-space: pre-wrap; word-break: break-word; }
+    .muted { color:#9ca3af; }
+
+    /* Painel lateral menor */
+    .side-card .row { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:13px; }
+    .side-card .row span.value { font-weight:700; color:#111827; }
+
+    /* Botão Google */
+    #login-google {
+      padding: 8px 14px; background: #e67e22; color: white; border: none; border-radius: 8px;
+      font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    }
+    #login-google[disabled] { opacity: 0.7; cursor: default; }
+
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
+    }
   </style>
 
   <!-- Backend base URL injetada pelo servidor do painel -->
@@ -55,123 +100,180 @@
 </head>
 <body>
   <div class="header">
-    <h1>⚖️ PocketMKT - Painel do Advogado</h1>
-    <div style="display:flex; align-items:center; gap:18px;">
-      <div class="user-role-indicator advogado" id="user-role-indicator">⚖️ MODO ADVOGADO ATIVO</div>
-      <div class="user-type-selector">
-        <select id="user-type">
-          <option value="cliente">👤 Cliente</option>
-          <option value="advogado" selected>⚖️ Advogado</option>
-        </select>
-      </div>
-
-      <!-- Botão Google -->
-      <button id="login-google"
-              style="margin-left:18px;padding:8px 18px;background:#e67e22;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:7px;">
-        <span style="font-size:18px;">🔐</span> Conectar Google
-      </button>
+    <h1>⚖️ PocketMKT – Painel (MVP WhatsApp)</h1>
+    <div class="actions">
+      <span id="role-badge" class="badge">MODO MVP • WhatsApp + Twilio</span>
+      <button id="login-google"><span style="font-size:18px;">🔐</span> Conectar Google</button>
     </div>
   </div>
 
   <div class="container">
-    <div class="main-content">
-      <div class="control-panel">
-        <div class="panel-section">
-          <h3>📝 Prompt Configuração</h3>
-          <label for="prompt-system">System Prompt:</label>
-          <textarea id="prompt-system" rows="6" style="width:100%;font-size:12px;"></textarea>
-          <label for="prompt-free" style="margin-top:10px;">Free Prompt:</label>
-          <textarea id="prompt-free" rows="4" style="width:100%;font-size:12px;"></textarea>
-          <button id="save-prompt" style="margin-top:8px;width:100%;background:#2980b9;color:white;border:none;padding:8px 0;border-radius:5px;">Salvar Prompt</button>
-          <span id="prompt-status" style="font-size:11px;color:#27ae60;display:none;">Prompt salvo!</span>
-        </div>
-
-        <div class="panel-section">
-          <h3>👨‍⚖️ Funções do Advogado</h3>
-          <div class="function-toggle"><input type="checkbox" id="func_onboarding" checked><label for="func_onboarding">Onboarding Completo</label><div class="status-indicator status-on" id="status_onboarding"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_onboarding_completo" checked><label for="func_onboarding_completo">Onboarding + Planilha/Email</label><div class="status-indicator status-on" id="status_onboarding_completo"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_planilhas" checked><label for="func_planilhas">Criação de Planilhas</label><div class="status-indicator status-on" id="status_planilhas"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_email" checked><label for="func_email">Notificações Email</label><div class="status-indicator status-on" id="status_email"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_prazos" checked><label for="func_prazos">Verificação de Prazos</label><div class="status-indicator status-on" id="status_prazos"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_documentos" checked><label for="func_documentos">Gestão Documentos</label><div class="status-indicator status-on" id="status_documentos"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_honorarios" checked><label for="func_honorarios">Gestão Honorários</label><div class="status-indicator status-on" id="status_honorarios"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_diario" checked><label for="func_diario">Consulta Diário</label><div class="status-indicator status-on" id="status_diario"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_resumos" checked><label for="func_resumos">Resumos/Estatísticas</label><div class="status-indicator status-on" id="status_resumos"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_relatorio_geral" checked><label for="func_relatorio_geral">Relatório Geral</label><div class="status-indicator status-on" id="status_relatorio_geral"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_relatorio_casos" checked><label for="func_relatorio_casos">Relatório Casos</label><div class="status-indicator status-on" id="status_relatorio_casos"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_relatorio_honorarios" checked><label for="func_relatorio_honorarios">Relatório Honorários</label><div class="status-indicator status-on" id="status_relatorio_honorarios"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_resumo_pre_encontro" checked><label for="func_resumo_pre_encontro">Resumo Pré-Encontro</label><div class="status-indicator status-on" id="status_resumo_pre_encontro"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_preparar_audiencia" checked><label for="func_preparar_audiencia">Preparar Audiência</label><div class="status-indicator status-on" id="status_preparar_audiencia"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_enviar_resumo_email" checked><label for="func_enviar_resumo_email">Enviar Resumo por Email</label><div class="status-indicator status-on" id="status_enviar_resumo_email"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_verificar_notificacoes" checked><label for="func_verificar_notificacoes">Verificar Notificações</label><div class="status-indicator status-on" id="status_verificar_notificacoes"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_alterar_agendamento" checked><label for="func_alterar_agendamento">Alterar Agendamento</label><div class="status-indicator status-on" id="status_alterar_agendamento"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_cancelar_agendamento" checked><label for="func_cancelar_agendamento">Cancelar Agendamento</label><div class="status-indicator status-on" id="status_cancelar_agendamento"></div></div>
-        </div>
-
-        <div class="panel-section">
-          <h3>👥 Funções do Cliente</h3>
-          <div class="function-toggle"><input type="checkbox" id="func_relato_casos" checked><label for="func_relato_casos">Relato de Casos</label><div class="status-indicator status-on" id="status_relato_casos"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_transcricao" checked><label for="func_transcricao">Transcrição Áudio</label><div class="status-indicator status-on" id="status_transcricao"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_agendamento" checked><label for="func_agendamento">Agendamento</label><div class="status-indicator status-on" id="status_agendamento"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_status" checked><label for="func_status">Status Conversa</label><div class="status-indicator status-on" id="status_status"></div></div>
-          <div class="function-toggle"><input type="checkbox" id="func_extrair_infos" checked><label for="func_extrair_infos">Extração de Informações</label><div class="status-indicator status-on" id="status_extrair_infos"></div></div>
-        </div>
-
-        <div class="panel-section" id="debug-panel" style="background:#f3f6fa;border:1px solid #dbeafe;margin-top:18px;padding:10px 12px;">
-          <h3>🐞 Debugging & Integrações</h3>
-          <div style="font-size:13px;margin-bottom:6px;">Status do Backend: <span id="debug-backend-status">...</span></div>
-          <div style="font-size:13px;margin-bottom:6px;">Google Sheets: <span id="debug-google-sheets">...</span></div>
-          <div style="font-size:13px;margin-bottom:6px;">Google Calendar: <span id="debug-google-calendar">...</span></div>
-          <div style="font-size:13px;margin-bottom:6px;">Gmail API: <span id="debug-gmail">...</span></div>
-          <div style="font-size:13px;margin-bottom:6px;">LLM: <span id="debug-llm">...</span></div>
-          <button id="btn-debug-refresh" style="margin-top:8px;width:100%;background:#6366f1;color:white;border:none;padding:7px 0;border-radius:5px;font-size:13px;">🔄 Atualizar Debug</button>
+    <div class="grid">
+      <!-- Coluna principal: instruções (entrou no lugar do antigo chat) -->
+      <div class="card">
+        <h2>📘 Como testar o MVP (WhatsApp + Twilio)</h2>
+        <p class="lead">
+          Este painel não simula mais chat. O fluxo oficial é pelo WhatsApp, via Twilio. Siga os passos abaixo para validar ponta‑a‑ponta.
+        </p>
+        <div class="steps">
+          <div class="step">
+            <strong>1) Conecte seu Google (Sheets/Calendar/Gmail)</strong><br/>
+            Use o botão <span class="kbd">Conectar Google</span> no topo. Em alguns ambientes, ele pode redirecionar para seu domínio
+            com autenticação. Após autenticar, volte a esta página.
+          </div>
+          <div class="step">
+            <strong>2) Verifique o Backend</strong><br/>
+            Clique em <span class="kbd">Atualizar Debug</span> no bloco de Debug à direita. Você deverá ver o status do
+            <em>backend</em>, LLM e integrações do Google.
+          </div>
+          <div class="step">
+            <strong>3) Teste pelo WhatsApp (Twilio)</strong><br/>
+            Envie uma mensagem inicial (saudação simples) para o número/sandbox configurado no Twilio. O backend irá
+            processar a conversa e registrar eventos que você pode acompanhar no Debug.
+          </div>
+          <div class="step">
+            <strong>4) Coleta de evidências</strong><br/>
+            Use <span class="kbd">Exportar Debug</span> para baixar um arquivo <code>.json</code> com todos os logs coletados
+            nesta sessão de testes.
+          </div>
+          <div class="step">
+            <strong>Dicas</strong><br/>
+            • Sempre comece com uma saudação (ex.: “Olá, tudo bem?”).<br/>
+            • Para acelerar a triagem, inclua: nome completo, motivo do contato e preferência de horário.<br/>
+            • Erros intermitentes de autenticação Google geralmente se resolvem refazendo o login e voltando ao painel.
+          </div>
         </div>
       </div>
+
+      <!-- Coluna lateral: Debug ampliado e painéis auxiliares -->
+      <div class="card side-card">
+        <h2>🐞 Debugging & Integrações</h2>
+        <div class="debug-toolbar">
+          <button class="btn btn-primary" id="btn-debug-refresh">🔄 Atualizar Debug</button>
+          <button class="btn btn-secondary" id="btn-export">⬇️ Exportar Debug</button>
+          <button class="btn btn-muted" id="btn-clear">🧹 Limpar Console</button>
+          <label class="muted"><input type="checkbox" id="auto-poll" checked /> Auto atualizar (a cada 10s)</label>
+        </div>
+        <div class="debug-status">
+          Backend: <span id="debug-backend-status" class="muted">checando...</span> •
+          Google: <span id="debug-google" class="muted">—</span> •
+          LLM: <span id="debug-llm" class="muted">—</span>
+        </div>
+        <div id="debug-console" class="debug-console" aria-label="Console de debug" role="log"></div>
+      </div>
+    </div>
+
+    <!-- Cartão menor com info técnica -->
+    <div class="card" style="margin-top:18px;">
+      <h2>⚙️ Configurações Rápidas</h2>
+      <div class="row"><span>BACKEND_BASE_URL:</span> <span id="row-backend" class="value">—</span></div>
+      <div class="row"><span>Painel Atual:</span> <span class="value" id="row-location">—</span></div>
     </div>
   </div>
 
-  <!-- Script: botão Google + status -->
   <script>
-  (async function() {
-    const btn = document.getElementById('login-google');
+    // ====== Botão Google ======
+    (function initGoogleBtn() {
+      const btn = document.getElementById('login-google');
 
-    function setButton(state) {
-      if (state === 'authed') {
-        btn.textContent = '✅ Google conectado';
-        btn.style.background = '#27ae60';
-        btn.disabled = true;
-        btn.style.cursor = 'default';
-      } else if (state === 'loading') {
-        btn.textContent = '⏳ Verificando Google...';
-        btn.style.background = '#6c757d';
-        btn.disabled = true;
-        btn.style.cursor = 'wait';
-      } else {
+      function setStateIdle() {
         btn.innerHTML = '<span style="font-size:18px;">🔐</span> Conectar Google';
-        btn.style.background = '#e67e22';
         btn.disabled = false;
-        btn.style.cursor = 'pointer';
       }
+      function setStateLoading() {
+        btn.textContent = '⏳ Redirecionando...';
+        btn.disabled = true;
+      }
+
+      btn.addEventListener('click', () => {
+        setStateLoading();
+        // Pedido: apontar para https://pocketmkt-panel.duckdns.org/painel
+        // (seu Nginx/Backend deve redirecionar para o fluxo de OAuth quando necessário)
+        window.location.href = 'https://pocketmkt-panel.duckdns.org/painel';
+      });
+
+      setStateIdle();
+    })();
+
+    // ====== Debug Console ======
+    const debugConsoleEl = document.getElementById('debug-console');
+    const logs = []; // memória da sessão (exportável)
+
+    function addLog(obj) {
+      const entry = {
+        t: new Date().toISOString(),
+        ...obj
+      };
+      logs.push(entry);
+      const line = document.createElement('div');
+      line.className = 'debug-line';
+      line.textContent = JSON.stringify(entry, null, 0);
+      debugConsoleEl.appendChild(line);
+      debugConsoleEl.scrollTop = debugConsoleEl.scrollHeight;
     }
 
-    async function refreshAuthButton() {
+    async function fetchStatus() {
       try {
-        setButton('loading');
-        const r = await fetch(`${BACKEND_BASE_URL}/status`, { credentials: 'omit' });
-        const j = await r.json().catch(() => ({}));
-        const authed = j.google_oauth === true || (j.backend_status && j.backend_status.google_oauth === true);
-        setButton(authed ? 'authed' : 'off');
+        const res = await fetch(`${BACKEND_BASE_URL}/status`, { credentials: 'omit' });
+        const json = await res.json().catch(() => ({}));
+        // Atualiza status sintético
+        const googleOk = json.google_oauth === true ||
+                         (json.backend_status && json.backend_status.google_oauth === true);
+        const llm = (json.backend_status && json.backend_status.llm) || json.llm || 'desconhecido';
+        document.getElementById('debug-backend-status').textContent =
+          res.ok ? 'ONLINE' : `ERRO HTTP ${res.status}`;
+        document.getElementById('debug-google').textContent = googleOk ? 'Autenticado' : 'Desconectado';
+        document.getElementById('debug-llm').textContent = typeof llm === 'string' ? llm : JSON.stringify(llm);
+
+        addLog({ type: 'status', ok: res.ok, body: json });
       } catch (e) {
-        setButton('off');
+        document.getElementById('debug-backend-status').textContent = 'OFFLINE';
+        document.getElementById('debug-google').textContent = '—';
+        document.getElementById('debug-llm').textContent = '—';
+        addLog({ type: 'status_error', error: String(e) });
       }
     }
 
-    btn.addEventListener('click', () => {
-      window.location.href = `${BACKEND_BASE_URL}/authorize`;
+    // Botões debug
+    document.getElementById('btn-debug-refresh').addEventListener('click', fetchStatus);
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      logs.length = 0;
+      debugConsoleEl.innerHTML = '';
+      addLog({ type: 'console_cleared' });
+    });
+    document.getElementById('btn-export').addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), logs }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().replaceAll(':','-');
+      a.href = url;
+      a.download = `pocketmkt-debug-${ts}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      addLog({ type: 'export', count: logs.length });
     });
 
-    refreshAuthButton();
-  })();
+    // Auto-poll status
+    const autoPoll = document.getElementById('auto-poll');
+    let pollTimer = null;
+    function startPoll() {
+      stopPoll();
+      pollTimer = setInterval(fetchStatus, 10000);
+    }
+    function stopPoll() {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    }
+    autoPoll.addEventListener('change', () => {
+      if (autoPoll.checked) startPoll(); else stopPoll();
+    });
+
+    // Infos rápidas
+    document.getElementById('row-backend').textContent = BACKEND_BASE_URL || 'N/D';
+    document.getElementById('row-location').textContent = window.location.href;
+
+    // Primeira carga:
+    fetchStatus();
+    startPoll();
   </script>
 </body>
 </html>

@@ -299,7 +299,7 @@ def status_backend():
     return jsonify({
         "flask_backend": "OK",
         "google_oauth": bool(svc is not None),
-        "endpoints": ["/processar_atendimento", "/mensagem", "/authorize", "/oauth2callback", "/status"]
+        "endpoints": ["/processar_atendimento", "/authorize", "/oauth2callback", "/status"]
     }), 200
 import traceback
 import os
@@ -752,23 +752,6 @@ from twilio.twiml.messaging_response import MessagingResponse
 #         # Extrair informações da requisição
 #         mensagem = data.get('mensagem', '')
 #         audio_url = data.get('audio_url', '')
-
-@atendimento_bp.route("/mensagem", methods=["POST"])
-def receber_mensagem():
-    # Suporte a application/x-www-form-urlencoded (Twilio) e JSON
-    if request.content_type and request.content_type.startswith("application/json"):
-        data = request.get_json(force=True)
-        mensagem = data.get("mensagem", "")
-        resposta_llm = responder_fluxo_universal(mensagem)
-        return jsonify({"reply": resposta_llm})
-    else:
-        incoming_msg = request.values.get('Body', '').strip()
-        from_number = request.values.get('From', '')
-        print(f"Recebido de {from_number}: {incoming_msg}")
-        resposta_llm = responder_fluxo_universal(incoming_msg)
-        resp = MessagingResponse()
-        resp.message(resposta_llm)
-        return Response(str(resp), mimetype="application/xml")
 
 @atendimento_bp.route('/processar_atendimento', methods=['POST'])
 def processar_atendimento():
