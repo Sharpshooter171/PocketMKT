@@ -11,8 +11,11 @@
     .header h1 { margin:0; font-size:18px; font-weight:700 }
     .actions { display:flex; align-items:center; gap:10px }
     .badge { background:#27ae60; color:#fff; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800 }
-    #login-google { padding:8px 14px; background:#e67e22; color:#fff; border:0; border-radius:10px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px }
-    #login-google[disabled]{ opacity:.75; cursor:default }
+    /* Link estilo botão para abrir em nova aba */
+    #login-google {
+      padding:8px 14px; background:#e67e22; color:#fff; border:0; border-radius:10px;
+      font-weight:800; text-decoration:none; display:inline-flex; align-items:center; gap:6px;
+    }
     .container { max-width:1280px; margin:0 auto; padding:18px }
     .grid { display:grid; grid-template-columns: 1.2fr 1fr; gap:18px }
     @media (max-width: 1000px){ .grid{ grid-template-columns: 1fr } }
@@ -50,18 +53,21 @@
     <h1>⚖️ PocketMKT – Painel (MVP WhatsApp)</h1>
     <div class="actions">
       <span class="badge">MODO MVP • WhatsApp + Twilio</span>
-      <button id="login-google"><span style="font-size:18px;">🔐</span> Conectar Google</button>
+      <!-- Agora é link abrindo em nova aba -->
+      <a id="login-google" href="http://pocketmkt-api.duckdns.org/authorize" target="_blank" rel="noopener noreferrer">
+        <span style="font-size:18px;">🔐</span> Conectar Google
+      </a>
     </div>
   </div>
 
   <div class="container">
     <div class="grid">
-      <!-- ESQUERDA: Instruções no lugar do chat -->
+      <!-- ESQUERDA: Instruções e Guia -->
       <div class="card">
         <h2>📘 Como testar o MVP (WhatsApp + Twilio)</h2>
         <p class="lead">Este painel não simula mais chat. O fluxo oficial é pelo WhatsApp (Twilio). Use as seções à direita para configurar e testar.</p>
         <div class="steps">
-          <div class="step"><strong>1) Conectar Google</strong><br/>Clique em <span class="kbd">Conectar Google</span>. Ao finalizar, volte para o painel.</div>
+          <div class="step"><strong>1) Conectar Google</strong><br/>Clique em <span class="kbd">Conectar Google</span>. A autenticação abrirá em uma nova aba, mantendo o painel aberto.</div>
           <div class="step"><strong>2) Status</strong><br/>Em <span class="kbd">Debug</span>, use <em>Atualizar</em> para ver o estado do backend, Google e LLM.</div>
           <div class="step"><strong>3) WhatsApp</strong><br/>Envie uma saudação para o número/sandbox do Twilio. Acompanhe os eventos no Debug.</div>
           <div class="step"><strong>4) Evidências</strong><br/>Use <em>Exportar Debug</em> para baixar um <code>.json</code> com todos os logs desta sessão.</div>
@@ -72,27 +78,12 @@
         </div>
       </div>
 
-      <!-- DIREITA: Toggles, Prompt e Debug -->
+      <!-- DIREITA: Toggles + Debug (Prompt Config REMOVIDO) -->
       <div>
-        <div class="panel-section">
-          <div class="head">📝 Prompt Configuração</div>
-          <div class="body">
-            <label class="muted">System Prompt:</label>
-            <textarea id="prompt-system" rows="6"></textarea>
-            <label class="muted" style="margin-top:10px; display:block;">Free Prompt:</label>
-            <textarea id="prompt-free" rows="4"></textarea>
-            <div style="display:flex; gap:8px; margin-top:8px;">
-              <button id="save-prompt" class="btn btn-primary" style="flex:1;">Salvar Prompt</button>
-              <button id="reload-prompt" class="btn btn-muted">Recarregar</button>
-            </div>
-            <div id="prompt-status" class="muted" style="display:none; margin-top:6px;">✅ Prompt salvo!</div>
-          </div>
-        </div>
-
+        <!-- Funções do Advogado -->
         <div class="panel-section">
           <div class="head">👨‍⚖️ Funções do Advogado</div>
           <div class="body" id="toggles-adv">
-            <!-- mesmas funções -->
             <div class="row"><input type="checkbox" id="func_onboarding" checked><label for="func_onboarding">Onboarding Completo</label><div class="status-dot on" data-dot="func_onboarding"></div></div>
             <div class="row"><input type="checkbox" id="func_onboarding_completo" checked><label for="func_onboarding_completo">Onboarding + Planilha/Email</label><div class="status-dot on" data-dot="func_onboarding_completo"></div></div>
             <div class="row"><input type="checkbox" id="func_planilhas" checked><label for="func_planilhas">Criação de Planilhas</label><div class="status-dot on" data-dot="func_planilhas"></div></div>
@@ -114,6 +105,7 @@
           </div>
         </div>
 
+        <!-- Funções do Cliente -->
         <div class="panel-section">
           <div class="head">👥 Funções do Cliente</div>
           <div class="body" id="toggles-cli">
@@ -125,6 +117,7 @@
           </div>
         </div>
 
+        <!-- Debug -->
         <div class="panel-section">
           <div class="head">🐞 Debugging & Integrações</div>
           <div class="body">
@@ -145,6 +138,7 @@
       </div>
     </div>
 
+    <!-- Infos -->
     <div class="card" style="margin-top:12px;">
       <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:13px;">
         <div>BACKEND_BASE_URL: <strong id="row-backend">—</strong></div>
@@ -154,17 +148,7 @@
   </div>
 
   <script>
-(function initGoogleBtn(){
-  const btn = document.getElementById('login-google');
-  const url = 'http://pocketmkt-api.duckdns.org/authorize';
-  btn.addEventListener('click', (e) => {
-    e.preventDefault();
-    // Abre em nova aba/guia sem fechar o painel:
-    const w = window.open(url, '_blank', 'noopener');
-    if (w) { w.opener = null; } // segurança extra
-  });
-})();
-
+    // ===== Debug Console =====
     const debugEl = document.getElementById('debug-console');
     const logs = [];
     function addLog(obj) {
@@ -218,32 +202,9 @@
         });
       });
     }
-    async function loadPrompt(){
-      try{
-        const r = await fetch(`${BACKEND_BASE_URL}/prompt_config`, { method:'GET' });
-        const j = await r.json().catch(()=>({}));
-        document.getElementById('prompt-system').value = j.system_prompt || '';
-        document.getElementById('prompt-free').value   = j.free_prompt || '';
-        addLog({ type:'prompt_get_ok' });
-      }catch(e){ addLog({ type:'prompt_get_err', error:String(e) }); }
-    }
-    async function savePrompt(){
-      try{
-        const payload = {
-          system_prompt: document.getElementById('prompt-system').value,
-          free_prompt: document.getElementById('prompt-free').value
-        };
-        const r = await fetch(`${BACKEND_BASE_URL}/prompt_config`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-        const ok = r.ok;
-        document.getElementById('prompt-status').style.display = ok ? 'block' : 'none';
-        addLog({ type:'prompt_save', ok });
-      }catch(e){ addLog({ type:'prompt_save_err', error:String(e) }); }
-    }
-    document.getElementById('save-prompt').addEventListener('click', savePrompt);
-    document.getElementById('reload-prompt').addEventListener('click', loadPrompt);
     document.getElementById('row-backend')?.textContent = BACKEND_BASE_URL || 'N/D';
     document.getElementById('row-location')?.textContent = window.location.href;
-    loadToggles(); loadPrompt(); fetchStatus(); startPoll();
+    loadToggles(); fetchStatus(); startPoll();
   </script>
 </body>
 </html>
