@@ -22,7 +22,6 @@
     .steps { margin-top:10px }
     .step { background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin-bottom:10px; font-size:14px; color:#1f2937 }
     .kbd { display:inline-block; padding:2px 6px; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size:12px; background:#f8fafc; color:#0f172a }
-    /* Side panel */
     .panel-section { margin-bottom:16px; background:#fff; border-radius:12px; border:1px solid #e5e7eb; }
     .panel-section > .head { padding:12px 14px; border-bottom:1px solid #e5e7eb; font-weight:800; color:#1f2937; background:#f9fafb; border-radius:12px 12px 0 0 }
     .panel-section .body { padding:12px 14px }
@@ -32,20 +31,19 @@
     .status-dot { width:10px; height:10px; border-radius:50% }
     .on { background:#10b981 }
     .off { background:#ef4444 }
-    textarea,input,button,select { font: inherit }
-    textarea { width:100%; border:1px solid #e5e7eb; border-radius:10px; padding:8px; resize:vertical }
     .btn { border:0; border-radius:10px; padding:8px 12px; font-weight:800; cursor:pointer }
     .btn-primary { background:#6366f1; color:#fff }
     .btn-secondary { background:#0ea5e9; color:#fff }
     .btn-muted { background:#e5e7eb; color:#111827 }
-    /* Debug */
     .debug-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px }
     .debug-status { font-size:13px; margin-bottom:8px }
     .debug-console { height:420px; background:#0b1220; color:#e5e7eb; padding:12px; border-radius:12px; overflow-y:auto; font-family: ui-monospace, monospace; font-size:12px; border:1px solid #1f2937 }
     .debug-line { margin-bottom:6px; white-space: pre-wrap; word-break: break-word }
     .muted { color:#6b7280 }
   </style>
-  <script>const BACKEND_BASE_URL = "{{ BACKEND_BASE_URL }}";</script>
+  <script>
+    const BACKEND_BASE_URL = "{{ BACKEND_BASE_URL }}";
+  </script>
 </head>
 <body>
   <div class="header">
@@ -58,7 +56,7 @@
 
   <div class="container">
     <div class="grid">
-      <!-- ESQUERDA: Instruções -->
+      <!-- ESQUERDA: Instruções no lugar do chat -->
       <div class="card">
         <h2>📘 Como testar o MVP (WhatsApp + Twilio)</h2>
         <p class="lead">Este painel não simula mais chat. O fluxo oficial é pelo WhatsApp (Twilio). Use as seções à direita para configurar e testar.</p>
@@ -68,17 +66,20 @@
           <div class="step"><strong>3) WhatsApp</strong><br/>Envie uma saudação para o número/sandbox do Twilio. Acompanhe os eventos no Debug.</div>
           <div class="step"><strong>4) Evidências</strong><br/>Use <em>Exportar Debug</em> para baixar um <code>.json</code> com todos os logs desta sessão.</div>
         </div>
+        <div class="card" style="margin-top:12px;">
+          <h2>📚 Guia de Testes do Assistente Modular</h2>
+          <pre style="white-space: pre-wrap; font-size:13px; line-height:1.45; color:#111827;">{{ INSTRUCAO_TESTE_ASSISTENTE }}</pre>
+        </div>
       </div>
 
-      <!-- DIREITA: Toggles + Prompt + Debug -->
+      <!-- DIREITA: Toggles, Prompt e Debug -->
       <div>
-        <!-- Prompt -->
         <div class="panel-section">
           <div class="head">📝 Prompt Configuração</div>
           <div class="body">
-            <label for="prompt-system" class="muted">System Prompt:</label>
+            <label class="muted">System Prompt:</label>
             <textarea id="prompt-system" rows="6"></textarea>
-            <label for="prompt-free" class="muted" style="margin-top:10px; display:block;">Free Prompt:</label>
+            <label class="muted" style="margin-top:10px; display:block;">Free Prompt:</label>
             <textarea id="prompt-free" rows="4"></textarea>
             <div style="display:flex; gap:8px; margin-top:8px;">
               <button id="save-prompt" class="btn btn-primary" style="flex:1;">Salvar Prompt</button>
@@ -88,10 +89,10 @@
           </div>
         </div>
 
-        <!-- Funções do Advogado -->
         <div class="panel-section">
           <div class="head">👨‍⚖️ Funções do Advogado</div>
           <div class="body" id="toggles-adv">
+            <!-- mesmas funções -->
             <div class="row"><input type="checkbox" id="func_onboarding" checked><label for="func_onboarding">Onboarding Completo</label><div class="status-dot on" data-dot="func_onboarding"></div></div>
             <div class="row"><input type="checkbox" id="func_onboarding_completo" checked><label for="func_onboarding_completo">Onboarding + Planilha/Email</label><div class="status-dot on" data-dot="func_onboarding_completo"></div></div>
             <div class="row"><input type="checkbox" id="func_planilhas" checked><label for="func_planilhas">Criação de Planilhas</label><div class="status-dot on" data-dot="func_planilhas"></div></div>
@@ -113,7 +114,6 @@
           </div>
         </div>
 
-        <!-- Funções do Cliente -->
         <div class="panel-section">
           <div class="head">👥 Funções do Cliente</div>
           <div class="body" id="toggles-cli">
@@ -125,7 +125,6 @@
           </div>
         </div>
 
-        <!-- Debug -->
         <div class="panel-section">
           <div class="head">🐞 Debugging & Integrações</div>
           <div class="body">
@@ -146,7 +145,6 @@
       </div>
     </div>
 
-    <!-- Infos -->
     <div class="card" style="margin-top:12px;">
       <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:13px;">
         <div>BACKEND_BASE_URL: <strong id="row-backend">—</strong></div>
@@ -156,7 +154,6 @@
   </div>
 
   <script>
-    // ===== Google Auth (URL fixa) =====
     (function initGoogleBtn(){
       const btn = document.getElementById('login-google');
       btn.addEventListener('click', () => {
@@ -165,7 +162,6 @@
       });
     })();
 
-    // ===== Debug Console =====
     const debugEl = document.getElementById('debug-console');
     const logs = [];
     function addLog(obj) {
@@ -200,19 +196,11 @@
       a.href=url; a.download=`pocketmkt-debug-${new Date().toISOString().replaceAll(':','-')}.json`; a.click(); URL.revokeObjectURL(url);
       addLog({ type:'export', count: logs.length });
     });
-    // Auto-poll
     const autoPoll = document.getElementById('auto-poll'); let poll=null;
     function startPoll(){ stopPoll(); poll=setInterval(fetchStatus, 10000) }
     function stopPoll(){ if(poll){ clearInterval(poll); poll=null } }
     autoPoll.addEventListener('change', ()=> autoPoll.checked ? startPoll() : stopPoll());
-
-    // ===== Toggles (persistência local) =====
-    const toggleIds = [
-      'func_onboarding','func_onboarding_completo','func_planilhas','func_email','func_prazos','func_documentos','func_honorarios','func_diario',
-      'func_resumos','func_relatorio_geral','func_relatorio_casos','func_relatorio_honorarios','func_resumo_pre_encontro','func_preparar_audiencia',
-      'func_enviar_resumo_email','func_verificar_notificacoes','func_alterar_agendamento','func_cancelar_agendamento',
-      'func_relato_casos','func_transcricao','func_agendamento','func_status','func_extrair_infos'
-    ];
+    const toggleIds = ['func_onboarding','func_onboarding_completo','func_planilhas','func_email','func_prazos','func_documentos','func_honorarios','func_diario','func_resumos','func_relatorio_geral','func_relatorio_casos','func_relatorio_honorarios','func_resumo_pre_encontro','func_preparar_audiencia','func_enviar_resumo_email','func_verificar_notificacoes','func_alterar_agendamento','func_cancelar_agendamento','func_relato_casos','func_transcricao','func_agendamento','func_status','func_extrair_infos'];
     function applyDot(id, on){ const dot=document.querySelector(`.status-dot[data-dot="${id}"]`); if(!dot) return; dot.classList.toggle('on', on); dot.classList.toggle('off', !on); }
     function loadToggles(){
       toggleIds.forEach(id=>{
@@ -227,8 +215,6 @@
         });
       });
     }
-
-    // ===== Prompt Config (GET/POST) =====
     async function loadPrompt(){
       try{
         const r = await fetch(`${BACKEND_BASE_URL}/prompt_config`, { method:'GET' });
@@ -236,9 +222,7 @@
         document.getElementById('prompt-system').value = j.system_prompt || '';
         document.getElementById('prompt-free').value   = j.free_prompt || '';
         addLog({ type:'prompt_get_ok' });
-      }catch(e){
-        addLog({ type:'prompt_get_err', error:String(e) });
-      }
+      }catch(e){ addLog({ type:'prompt_get_err', error:String(e) }); }
     }
     async function savePrompt(){
       try{
@@ -250,22 +234,13 @@
         const ok = r.ok;
         document.getElementById('prompt-status').style.display = ok ? 'block' : 'none';
         addLog({ type:'prompt_save', ok });
-      }catch(e){
-        addLog({ type:'prompt_save_err', error:String(e) });
-      }
+      }catch(e){ addLog({ type:'prompt_save_err', error:String(e) }); }
     }
     document.getElementById('save-prompt').addEventListener('click', savePrompt);
     document.getElementById('reload-prompt').addEventListener('click', loadPrompt);
-
-    // Infos
-    document.getElementById('row-backend').textContent = BACKEND_BASE_URL || 'N/D';
-    document.getElementById('row-location').textContent = window.location.href;
-
-    // Inicialização
-    loadToggles();
-    loadPrompt();
-    fetchStatus();
-    startPoll();
+    document.getElementById('row-backend')?.textContent = BACKEND_BASE_URL || 'N/D';
+    document.getElementById('row-location')?.textContent = window.location.href;
+    loadToggles(); loadPrompt(); fetchStatus(); startPoll();
   </script>
 </body>
 </html>
