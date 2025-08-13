@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, jsonify, redirect
 import requests
 import os
 from datetime import datetime
@@ -39,6 +39,11 @@ def painel():
     # injeta BACKEND_BASE_URL no HTML (para botão de login Google etc.)
     return render_template_string(PANEL_HTML, BACKEND_BASE_URL=BACKEND_BASE_URL)
 
+# (Opcional) rota de conveniência: redireciona para o authorize do backend
+@app.route("/google/auth")
+def google_auth():
+    return redirect(f"{BACKEND_BASE_URL}/authorize", code=302)
+
 # Proxy de prompt_config (GET/POST) para o backend
 @app.route("/prompt_config", methods=["GET", "POST"])
 def prompt_config_route():
@@ -63,7 +68,6 @@ def enviar():
     }
     try:
         r = requests.post(PROCESSAR_URL, json=payload, timeout=30)
-        # repassa a resposta do backend
         return jsonify(r.json()), r.status_code
     except Exception as e:
         return jsonify({"erro": "backend_offline", "detalhe": str(e)}), 502
