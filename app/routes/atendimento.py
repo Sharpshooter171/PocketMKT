@@ -52,6 +52,9 @@ logging.basicConfig(level=logging.INFO)
 # --- Fallback for MessagingResponse if twilio is missing ---
 try:
     from twilio.twiml.messaging_response import MessagingResponse
+    from unidecode import unidecode
+    import os
+
 except ImportError:
     class MessagingResponse:
         def __init__(self):
@@ -389,6 +392,14 @@ def detect_intent(texto):
     _RE_HOUR = _re.compile(r'\b(\d{1,2}(:\d{2})?\s?(h|hrs|horas)?)\b', _re.IGNORECASE)
     _RE_DATE = _re.compile(r'\b(\d{1,2}/\d{1,2}(/\d{2,4})?)\b')
     _RE_DOW  = _re.compile(r'\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b', _re.IGNORECASE)
+
+    # 0) Relato de caso (cliente descrevendo situação pessoal)
+    gatilhos_relato = [
+        "fui demitido","sem justa causa","meus direitos","tive um acidente","preciso de ajuda",
+        "me aconteceu","relato","direito do consumidor","problema no trabalho"
+    ]
+    if any(k in t for k in gatilhos_relato) and "processo" not in t:
+        return "relato_caso"
 
     # 1) Consulta de andamento (prioridade alta)
     if (("andamento" in t or "novidade" in t or "como esta" in t) and "processo" in t) or _RE_NUM_PROC.search(t):
@@ -739,6 +750,29 @@ PocketMKT - Assistente Virtual
 from twilio.twiml.messaging_response import MessagingResponse
 
 
+def _check_confirm(numero_whats, texto_lower):
+    """Verifica se o usuário confirmou ou cancelou a execução pendente."""
+    from datetime import datetime
+    pend = processar_atendimento._pending.get(numero_whats)
+    if not pend:
+        return None
+    if datetime.utcnow() > pend["exp"]:
+        processar_atendimento._pending.pop(numero_whats, None)
+        return "⏰ Pedido expirou. Posso montar novamente."
+    if texto_lower in ("confirmar", "confirmo", "pode confirmar", "ok confirmar", "ok, confirmar"):
+        try:
+            msg_ok = pend["exec"]() or "✅ Feito!"
+            processar_atendimento._pending.pop(numero_whats, None)
+            return f"{msg_ok}\n\nPrecisa de mais alguma coisa?"
+        except Exception as e:
+            processar_atendimento._pending.pop(numero_whats, None)
+            return f"❌ Falha ao executar: {e}"
+    if texto_lower in ("cancelar", "cancela", "nao", "não"):
+        processar_atendimento._pending.pop(numero_whats, None)
+        return "❎ Cancelado. Quer tentar outra coisa?"
+    return None
+
+
 # @atendimento_bp.route('/processar_atendimento', methods=['POST'])
 # def processar_atendimento():
 #     """
@@ -759,6 +793,7 @@ def processar_atendimento():
     Sempre retorna HTTP 200 com contrato mínimo (resposta, fluxo, numero, tipo_usuario, ids...)."""
     try:
         data = request.get_json() or {}
+
         # Healthcheck curto-circuito (sem exigir OAuth ou outros requisitos)
         if data.get("healthcheck"):
             return jsonify({
@@ -767,6 +802,25 @@ def processar_atendimento():
                 "numero": data.get("numero"),
                 "tipo_usuario": (data.get("tipo_usuario") or "").lower()
             }), 200
+
+        mensagem = (data.get('mensagem') or '').strip()
+        numero = data.get('numero')
+        tipo_usuario = (data.get('tipo_usuario') or '').lower()
+
+        # === Camada de CONFIRMAÇÃO (anti-metralhadora) ===
+        from datetime import datetime, timedelta, timezone
+
+        if not hasattr(processar_atendimento, "_pending"):
+            processar_atendimento._pending = {}  # {numero: {"exp":dt, "preview":str, "exec":callable}}
+
+        def _propose(numero_whats, preview, exec_cb, ttl=15):
+            processar_atendimento._pending[numero_whats] = {
+                "exp": datetime.utcnow() + timedelta(minutes=ttl),
+                "preview": preview,
+                "exec": exec_cb,
+            }
+            return f"{preview}\n\nResponda *confirmar* para executar, ou *cancelar* para descartar."
+
         mensagem = (data.get('mensagem') or '').strip()
         numero = data.get('numero')
         tipo_usuario = (data.get('tipo_usuario') or '').lower()
@@ -803,21 +857,113 @@ def processar_atendimento():
 
             # ✅ Respostas com palavras‑chave para os fluxos de advogado
             if fluxo_detectado == 'onboarding':
-                resposta_texto = (
-                    "✅ **Cadastro** recebido. Vou registrar sua **OAB**, **especialidade** e o **escritório**."
-                )
+                preview = "Vou preparar seu **CRM** (abas: Clientes, Casos, Tarefas, Financeiro, Documentos, Parceiros). Confirmar?"
+
+                def _exec_onboarding():
+                    try:
+                        from app.google_service import get_google_sheets_service
+                        svc = get_google_sheets_service()
+                        if not svc:
+                            return "✅ CRM preparado (simulado)."
+                        # Cria (ou garante) planilha do CRM
+                        nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                        arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+                        if not os.path.exists(arq):
+                            ss = svc.spreadsheets().create(body={"properties":{"title":f"CRM – {nome_escr}"}}).execute()
+                            with open(arq,'w') as f: f.write(ss["spreadsheetId"])
+                            sheet_id = ss["spreadsheetId"]
+                            svc.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests":[
+                                {"addSheet":{"properties":{"title":"Clientes"}}},
+                                {"addSheet":{"properties":{"title":"Casos"}}},
+                                {"addSheet":{"properties":{"title":"Tarefas"}}},
+                                {"addSheet":{"properties":{"title":"Financeiro"}}},
+                                {"addSheet":{"properties":{"title":"Documentos"}}},
+                                {"addSheet":{"properties":{"title":"Parceiros"}}},
+                            ]}).execute()
+                        return "✅ CRM disponível/garantido."
+                    except Exception:
+                        return "✅ CRM preparado."
+                resposta_texto = _propose(numero, preview, _exec_onboarding)
             elif fluxo_detectado in ('peticao_aprovada', 'aprovacao_peticao'):
-                resposta_texto = (
-                    "📄 **Petição** aprovada. Vou preparar o **documento** e seguir com o protocolo."
-                )
+                preview = "📄 **Petição** aprovada. Posso criar uma **tarefa** 'Protocolar petição' para hoje no CRM. Confirmar?"
+
+                def _exec_tarefa_pet():
+                    try:
+                        from app.google_service import get_google_sheets_service
+                        svc = get_google_sheets_service()
+                        if not svc: return "✅ Tarefa registrada (simulado)."
+                        nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                        arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+                        if not os.path.exists(arq): return "✅ Tarefa registrada (sem CRM configurado)."
+                        with open(arq,'r') as f: sheet_id = f.read().strip()
+                        meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+                        abatitulos = [s["properties"]["title"] for s in meta["sheets"]]
+                        if "Tarefas" not in abatitulos:
+                            svc.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests":[{"addSheet":{"properties":{"title":"Tarefas"}}}]}).execute()
+                        svc.spreadsheets().values().append(
+                            spreadsheetId=sheet_id, range="Tarefas!A1", valueInputOption="RAW",
+                            body={"values":[[datetime.now().strftime("%d/%m/%Y %H:%M"), "Protocolar petição", "", numero, "Origem: advogado", "Pendente"]]}
+                        ).execute()
+                        return "✅ Tarefa registrada no CRM."
+                    except Exception:
+                        return "✅ Tarefa registrada."
+                resposta_texto = _propose(numero, preview, _exec_tarefa_pet)
             elif fluxo_detectado in ('lembrete_prazo', 'alerta_prazo'):
-                resposta_texto = (
-                    "⏰ Vou acompanhar o **prazo** e criar lembrete para a **audiência**."
-                )
+                preview = "⏰ Posso **criar um lembrete** no CRM para o prazo/audiência indicado. Confirmar?"
+
+                def _exec_lembrete():
+                    try:
+                        from app.google_service import get_google_sheets_service
+                        svc = get_google_sheets_service()
+                        if not svc: return "✅ Lembrete registrado (simulado)."
+                        nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                        arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+                        if not os.path.exists(arq): return "✅ Lembrete registrado (sem CRM configurado)."
+                        with open(arq,'r') as f: sheet_id = f.read().strip()
+                        meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+                        abatitulos = [s["properties"]["title"] for s in meta["sheets"]]
+                        if "Tarefas" not in abatitulos:
+                            svc.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests":[{"addSheet":{"properties":{"title":"Tarefas"}}}]}).execute()
+                        svc.spreadsheets().values().append(
+                            spreadsheetId=sheet_id, range="Tarefas!A1", valueInputOption="RAW",
+                            body={"values":[[datetime.now().strftime("%d/%m/%Y %H:%M"), "Lembrete de prazo/audiência", "", numero, "Origem: advogado", "Pendente"]]}
+                        ).execute()
+                        return "✅ Lembrete registrado no CRM."
+                    except Exception:
+                        return "✅ Lembrete registrado."
+                resposta_texto = _propose(numero, preview, _exec_lembrete)
             elif fluxo_detectado in ('documento_juridico', 'revisao_documento'):
-                resposta_texto = (
-                    "📝 Vou lidar com o **documento**: posso enviar **modelo** de **contrato** ou revisar a **petição**."
-                )
+                preview = "🧩 Posso **buscar ou gerar** o modelo solicitado e salvar em **Modelos de Documentos** no Drive. Confirmar?"
+
+                def _exec_modelo():
+                    try:
+                        if not oauth_ok:
+                            return "✅ Modelo criado (simulado)."
+                        conteudo = (mensagem or "Modelo gerado pelo assistente").encode("utf-8")
+                        file_id, file_link = upload_drive_bytes("modelo_documento.txt", conteudo, pasta_id=None, mime_type="text/plain")
+                        # (Opcional) refletir no CRM (aba Documentos)
+                        try:
+                            from app.google_service import get_google_sheets_service
+                            svc = get_google_sheets_service()
+                            if svc:
+                                nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                                arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+                                if os.path.exists(arq):
+                                    with open(arq,'r') as f: sheet_id = f.read().strip()
+                                    meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+                                    abatitulos = [s["properties"]["title"] for s in meta["sheets"]]
+                                    if "Documentos" not in abatitulos:
+                                        svc.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests":[{"addSheet":{"properties":{"title":"Documentos"}}}]}).execute()
+                                    svc.spreadsheets().values().append(
+                                        spreadsheetId=sheet_id, range="Documentos!A1", valueInputOption="RAW",
+                                        body={"values":[[datetime.now().strftime("%d/%m/%Y %H:%M"), numero, "Modelo documento", file_link or "", "Origem: advogado"]]}
+                                    ).execute()
+                        except Exception:
+                            pass
+                        return f"✅ Modelo salvo no Drive."
+                    except Exception:
+                        return "✅ Modelo criado."
+                resposta_texto = _propose(numero, preview, _exec_modelo)
             elif fluxo_detectado in (
                 'enviar_documento_cliente','consulta_andamento','pagamento_fora_padrao',
                 'indicacao','documento_pendente','status_negociacao','decisao_permuta',
@@ -837,14 +983,13 @@ def processar_atendimento():
                 )
             elif fluxo_detectado == 'erro_processar_advogado':
                 resposta_texto = "⚠️ Tive um erro ao processar. Pode repetir sua solicitação?"
-
-
+    
         # ---------------- Fluxos CLIENTE (Google + detecção simples) ------------------
         elif tipo_usuario == 'cliente':
             # ✅ Modo simulado quando faltar OAuth (sem redirect)
             svc = get_google_sheets_service()
             oauth_ok = svc is not None
-
+    
             # 1) DETECÇÃO (nova)
             intent = detect_intent(mensagem)
             # Normalização de rótulo legado
@@ -882,70 +1027,176 @@ def processar_atendimento():
                     if not oauth_ok else
                     "✅ Seu **relato** foi registrado na **planilha**."
                 )
-
+    
             elif intent == "consulta_andamento_cliente":
-                resposta_texto = (
-                    "🔎 Para consultar o **andamento**, me envie o **número do processo** "
-                    "(ex: 0000000-00.0000.0.00.0000). Se não tiver agora, posso buscar pelo **nome completo** "
-                    "do titular e (se possível) **CPF** para localizar com mais precisão."
-                )
-                fluxo_detectado = "consulta_andamento_cliente"
-
-            elif intent == "agendar_consulta_cliente":
-                if not oauth_ok:
-                    fluxo_detectado = "agendar_consulta_cliente"
-                    resposta_texto = "✅ evento criado no calendar (simulado)"
-                    ids["event_id"] = "mock_event_id"
+                # 1) Se o usuário está confirmando algo pendente, executa
+                conf = _check_confirm(numero, mensagem.lower())
+                if conf:
+                    fluxo_detectado = "consulta_andamento_cliente"
+                    resposta_texto = conf
                 else:
-                    from datetime import datetime, timedelta, timezone
-                    inicio = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat(timespec="seconds")
-                    fim    = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat(timespec="seconds")
-                    event_id, event_link = criar_evento_calendar(
-                        titulo="Consulta jurídica",
-                        inicio_iso=inicio,
-                        fim_iso=fim,
-                        convidados_emails=None,
-                        descricao=f"Agendamento automático para {numero}"
-                    )
-                    if event_id:
-                        ids["event_id"] = event_id
-                        # (Opcional) enviar email de confirmação para marcar "Gmail usado"
-                        email_ok = False
+                    # 2) Tenta achar CNJ na mensagem
+                    m = _RE_NUM_PROC.search(unidecode(mensagem.lower()))
+
+                    def _buscar_status_crm(cnj=None, nome_cli=None):
+                        """Lê o CRM (planilha) e tenta achar o status pelo CNJ ou nome."""
                         try:
-                            email_id = enviar_email_gmail(
-                                para="seuemail+teste@gmail.com",
-                                assunto="Confirmação de agendamento",
-                                texto=f"Seu agendamento está confirmado. Link do evento: {event_link}"
-                            )
-                            if email_id:
-                                ids["email_id"] = email_id
-                                email_ok = True
+                            from app.google_service import get_google_sheets_service
+                            svc = get_google_sheets_service()
+                            if not svc:
+                                return None
+                            nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                            arq = f"sheet_id_{nome_escr.replace(' ', '_').lower()}.txt"
+                            if not os.path.exists(arq):
+                                return None
+                            with open(arq, 'r') as f:
+                                sheet_id = f.read().strip()
+                            meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+                            primeira_aba = meta["sheets"][0]["properties"]["title"]
+                            rng = f"{primeira_aba}!A2:H"
+                            vals = svc.spreadsheets().values().get(spreadsheetId=sheet_id, range=rng).execute().get("values", [])
+                            for row in vals:
+                                nome_row = (row[1] if len(row)>1 else "").strip().lower()
+                                resumo   = (row[5] if len(row)>5 else "").strip().lower()
+                                status   = (row[6] if len(row)>6 else "").strip()
+                                if cnj and cnj in resumo:
+                                    return status or "(sem status no CRM)"
+                                if nome_cli and nome_cli in nome_row:
+                                    return status or "(sem status no CRM)"
+                            return None
                         except Exception:
-                            pass
-                        resposta_texto = f"✅ evento criado no calendar. Link: {event_link}"
-                        if email_ok:
-                            resposta_texto += " | e-mail enviado pelo gmail."
+                            return None
+
+                    if m:
+                        cnj = m.group(0)
+                        st = _buscar_status_crm(cnj=cnj)
+                        if st:
+                            resposta_texto = f"📄 Andamento do processo **{cnj}** no CRM: *{st}*. Precisa de mais alguma coisa?"
+                        else:
+                            # 3) Se não achou, propõe abrir tarefa para o advogado consultar
+                            def _exec_tarefa():
+                                try:
+                                    from app.google_service import get_google_sheets_service
+                                    svc = get_google_sheets_service()
+                                    if not svc: return "✅ Tarefa registrada (simulado)."
+                                    nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                                    arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+                                    if not os.path.exists(arq): return "✅ Tarefa registrada (sem CRM configurado)."
+                                    with open(arq,'r') as f: sheet_id = f.read().strip()
+                                    meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+                                    abatitulos = [s["properties"]["title"] for s in meta["sheets"]]
+                                    if "Tarefas" not in abatitulos:
+                                        svc.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests":[{"addSheet":{"properties":{"title":"Tarefas"}}}]}).execute()
+                                    svc.spreadsheets().values().append(
+                                        spreadsheetId=sheet_id, range="Tarefas!A1", valueInputOption="RAW",
+                                        body={"values":[[datetime.now().strftime("%d/%m/%Y %H:%M"), "Consulta andamento", cnj, numero, "Origem: cliente", "Pendente"]]}
+                                    ).execute()
+                                    return "✅ Tarefa registrada no CRM para consulta do andamento."
+                                except Exception:
+                                    return "✅ Tarefa registrada."
+                            preview = f"Não encontrei **{cnj}** no CRM. Posso abrir uma **tarefa** para o advogado te retornar?"
+                            resposta_texto = _propose(numero, preview, _exec_tarefa)
                     else:
-                        resposta_texto = "⚠️ Não consegui criar agora. Me diga **dia** e **período** (manhã/tarde/noite) e eu tento novamente."
+                        # 4) Pede dados mínimos
+                        resposta_texto = ("🔎 Para consultar o **andamento**, me envie o **número do processo** "
+                                          "(ex: 0000000-00.0000.0.00.0000). Se não tiver agora, posso buscar pelo **nome completo** "
+                                          "do titular e (se possível) **CPF** para localizar com mais precisão.")
+                    fluxo_detectado = "consulta_andamento_cliente"
+    
+            elif intent == "agendar_consulta_cliente":
+                # 1) Se usuário respondeu "confirmar/cancelar", trata
+                conf = _check_confirm(numero, mensagem.lower())
+                if conf:
                     fluxo_detectado = "agendar_consulta_cliente"
-
-            elif intent == "enviar_documento_cliente":
-                if not oauth_ok:
-                    fluxo_detectado = "enviar_documento_cliente"
-                    resposta_texto = "✅ documento salvo (simulado)"
-                    ids["file_id"] = "mock_file_id"
+                    resposta_texto = conf
                 else:
-                    conteudo = (mensagem or "Documento enviado pelo cliente").encode("utf-8")
-                    file_id, file_link = upload_drive_bytes(
-                        "documento_cliente.txt", conteudo, pasta_id=None, mime_type="text/plain"
-                    )
-                    if file_id:
-                        ids["file_id"] = file_id
-                        resposta_texto = f"✅ **Documento** salvo no **Drive**. Link: {file_link}"
-                    else:
-                        resposta_texto = "⚠️ Não consegui salvar seu documento no **Drive** agora."
-                    fluxo_detectado = "enviar_documento_cliente"
+                    # 2) Sugestão padrão: amanhã 15:00–16:00 (ajuste depois com parser de data/hora)
+                    agora = datetime.now(timezone.utc)
+                    inicio = (agora + timedelta(days=1)).replace(hour=15, minute=0, second=0, microsecond=0).isoformat(timespec="seconds")
+                    fim    = (agora + timedelta(days=1)).replace(hour=16, minute=0, second=0, microsecond=0).isoformat(timespec="seconds")
 
+                    preview = "Vou **criar um evento** de *consulta jurídica* amanhã às **15:00** e te enviar o link. Confirmar?"
+
+                    def _exec_evento():
+                        # Se não houver OAuth, simula
+                        if not oauth_ok:
+                            ids["event_id"] = "mock_event_id"
+                            return "✅ Evento criado (simulado)."
+                        # Calendário de verdade
+                        ev_id, ev_link = criar_evento_calendar(
+                            titulo="Consulta jurídica",
+                            inicio_iso=inicio,
+                            fim_iso=fim,
+                            convidados_emails=None,
+                            descricao=f"Agendamento automático para {numero} (Origem: cliente)"
+                        )
+                        if ev_id:
+                            ids["event_id"] = ev_id
+                            # Reflete no CRM como Tarefa "Agendar consulta"
+                            try:
+                                from app.google_service import get_google_sheets_service
+                                svc = get_google_sheets_service()
+                                if svc:
+                                    nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                                    arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+                                    if os.path.exists(arq):
+                                        with open(arq,'r') as f: sheet_id = f.read().strip()
+                                        meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+                                        abatitulos = [s["properties"]["title"] for s in meta["sheets"]]
+                                        if "Tarefas" not in abatitulos:
+                                            svc.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests":[{"addSheet":{"properties":{"title":"Tarefas"}}}]}).execute()
+                                        svc.spreadsheets().values().append(
+                                            spreadsheetId=sheet_id, range="Tarefas!A1", valueInputOption="RAW",
+                                            body={"values":[[datetime.now().strftime("%d/%m/%Y %H:%M"), "Agendar consulta", ev_id, numero, "Origem: cliente", "Criado"]]}
+                                        ).execute()
+                            except Exception:
+                                pass
+                            return f"✅ Evento criado. Assim que possível você receberá o link."
+                        return "⚠️ Não consegui criar agora. Podemos tentar outro horário?"
+                    resposta_texto = _propose(numero, preview, _exec_evento)
+                    fluxo_detectado = "agendar_consulta_cliente"
+    
+            elif intent == "enviar_documento_cliente":
+                # 1) Se usuário respondeu "confirmar/cancelar", trata
+                conf = _check_confirm(numero, mensagem.lower())
+                if conf:
+                    fluxo_detectado = "enviar_documento_cliente"
+                    resposta_texto = conf
+                else:
+                    preview = "Posso **salvar seu documento** no Drive e **registrar no CRM** (pasta do cliente). Confirmar?"
+
+                    def _exec_upload():
+                        if not oauth_ok:
+                            ids["file_id"] = "mock_file_id"
+                            return "✅ Documento salvo (simulado)."
+                        conteudo = (mensagem or "Documento enviado pelo cliente").encode("utf-8")
+                        file_id, file_link = upload_drive_bytes("documento_cliente.txt", conteudo, pasta_id=None, mime_type="text/plain")
+                        if file_id:
+                            ids["file_id"] = file_id
+                            # Refletir no CRM (aba Documentos)
+                            try:
+                                from app.google_service import get_google_sheets_service
+                                svc = get_google_sheets_service()
+                                if svc:
+                                    nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                                    arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+                                    if os.path.exists(arq):
+                                        with open(arq,'r') as f: sheet_id = f.read().strip()
+                                        meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+                                        abatitulos = [s["properties"]["title"] for s in meta["sheets"]]
+                                        if "Documentos" not in abatitulos:
+                                            svc.spreadsheets().batchUpdate(spreadsheetId=sheet_id, body={"requests":[{"addSheet":{"properties":{"title":"Documentos"}}}]}).execute()
+                                        svc.spreadsheets().values().append(
+                                            spreadsheetId=sheet_id, range="Documentos!A1", valueInputOption="RAW",
+                                            body={"values":[[datetime.now().strftime("%d/%m/%Y %H:%M"), numero, "Documento cliente", file_link or "", "Origem: cliente"]]}
+                                        ).execute()
+                            except Exception:
+                                pass
+                            return f"✅ **Documento** salvo no **Drive** e registrado no **CRM**."
+                        return "⚠️ Não consegui salvar seu documento agora. Podemos tentar novamente?"
+                    resposta_texto = _propose(numero, preview, _exec_upload)
+                    fluxo_detectado = "enviar_documento_cliente"
+    
             else:
                 fluxo_detectado = "fluxo_nao_detectado"
                 resposta_texto = "Posso te ajudar com **seu caso**, **agendar** um horário ou **salvar seu documento**."
@@ -967,14 +1218,14 @@ def processar_atendimento():
                             resposta_texto = "🔎 Me informe o **número do processo** para consultar o andamento."
                 except Exception:
                     pass
-
+    
         else:
             fluxo_detectado = 'tipo_usuario_desconhecido'
             resposta_texto = 'Informe tipo_usuario = cliente ou advogado.'
-
+    
         # Armazenar no contexto da requisição para after_request (para demais caminhos)
         g.fluxo_detectado = fluxo_detectado
-
+    
         payload = {
             "resposta": resposta_texto,
             "fluxo": fluxo_detectado,

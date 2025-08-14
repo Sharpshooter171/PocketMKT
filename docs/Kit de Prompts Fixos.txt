@@ -1,0 +1,126 @@
+Kit de Prompts Fixos — PocketMKT (para colar e usar)
+
+1) Contexto-Âncora (cole no topo de qualquer conversa técnica)
+
+Contexto-Âncora PocketMKT (NÃO ALTERAR):
+- MVP em produção. Arquitetura atual:
+  • Backend Flask principal roda via main.py em 0.0.0.0:${FLASK_PORT:-5000}.
+  • Painel Flask roda em app/painel/painel.py na porta ${PANEL_PORT:-8000}; Nginx faz proxy do domínio do painel.
+  • Integrações: Twilio (WhatsApp), Google (Sheets/Drive/Gmail/Calendar).
+  • Endpoints relevantes do backend: /status, /prompt_config (compat), /processar_atendimento.
+  • Painel NÃO tem mais simulador de chat; tem instruções, toggles locais (localStorage) e debug com export JSON.
+  • Botão “Conectar Google” abre em nova aba: http://pocketmkt-api.duckdns.org/authorize
+- Arquivos principais: main.py, app/painel/painel.py (HTML em app/painel/painel.html), app/routes/atendimento.py
+- Objetivo: evoluir atendimento.py com o mínimo de impacto, preservando a lógica do “Assistente Modular”.
+- Regras:
+  1) NÃO mude a lógica global, contratos e comportamento padrão; faça mudanças mínimas.
+  2) Se faltarem detalhes, assuma o mais conservador possível ou me peça exemplos de entrada/saída.
+  3) NÃO introduza libs novas; use só o que já existe no projeto.
+  4) Sempre entregue patch mínimo (unified diff) e explique rapidamente o que mudou.
+
+2) Criar NOVA função de fluxo em atendimento.py
+
+Quero adicionar um novo fluxo em app/routes/atendimento.py chamado: <NOME_DO_FLUXO>.
+Requisitos:
+- NÃO alterar a lógica global do Assistente Modular.
+- Seguir o padrão das outras funções de fluxo (assinaturas, retornos, logs e tratamento de erro).
+- Validar entradas com checagens simples (sem libs novas) e retornar mensagens de erro amigáveis.
+- Se o fluxo envolver Google/Twilio, apenas chamar utilitários já existentes no projeto (ou criar stubs mínimos comentados).
+- Cobrir pelo menos 3 casos (feliz, entrada faltando, erro externo) via comentários de teste manual (curl).
+Formato de saída:
+- Forneça um patch unified diff SOMENTE do arquivo app/routes/atendimento.py.
+- Explique em 3 bullets o que mudou.
+Exemplo de uso a atender:
+- Entrada: {"tipo_usuario":"advogado","mensagem":"Me lembrar da audiência dia 20","numero":"+55..."}
+- Saída: texto claro confirmando agendamento/criação de lembrete (sem mudar o resto).
+
+3) Modificar função EXISTENTE sem quebrar contrato
+
+Preciso ajustar a função <NOME_DA_FUNCAO> em app/routes/atendimento.py.
+Objetivo: <DESCREVA O AJUSTE MINIMO>.
+Restrições:
+- NÃO alterar assinatura da função, nomes de variáveis públicas ou o formato do retorno.
+- Mantém compatibilidade com os chamadores atuais (Twilio, Google, etc).
+- Se o fix mexer em branches de decisão, acrescente comentários explicando o porquê (português, curto).
+Formato:
+- Patch unified diff APENAS de app/routes/atendimento.py.
+- 1 bloco “Notas de revisão” com: contrato preservado, cenários cobertos e riscos residuais.
+
+4) Instrumentar LOGS & ERROS (observabilidade leve)
+
+Quero instrumentar logs padronizados na(s) função(ões) <LISTA> em app/routes/atendimento.py.
+Regras:
+- Usar logging/prints já adotados no projeto (sem libs novas).
+- Níveis: info para início/fim (com duração), warning para entradas inválidas, error para exceções externas (Twilio/Google).
+- Inclua um ID simples de correlação por requisição (ex.: req_id = time.time_ns()) e logue-o em todas as mensagens.
+- Padronize resposta de erro: {"erro": "<chave_curta>", "mensagem": "<humana>"} mantendo HTTP atual.
+Formato:
+- Patch unified diff APENAS de app/routes/atendimento.py.
+- 1 tabela curta (markdown) com exemplos de linhas de log geradas (info/warn/error).
+
+
+5) Endurecer validação de ENTRADA sem mudar comportamento
+
+Endureça a validação de entrada na função <NOME> em app/routes/atendimento.py.
+Alvos:
+- Confirmar campos essenciais (ex.: tipo_usuario, mensagem, numero) com mensagens claras se faltarem.
+- Normalizar campos comuns (trim, lower em chaves de intenção, etc.) sem mudar a lógica final.
+- NÃO introduzir dependências novas.
+Formato:
+- Patch unified diff APENAS de app/routes/atendimento.py.
+- Liste 3 casos inválidos e a resposta esperada (mensagens de erro).
+
+6) Tratamento de TIMEOUTS/RETRY para integrações
+
+Implemente retry leve com backoff exponencial (máx 3 tentativas) nas chamadas externas usadas em <NOME_DA_FUNCAO> de app/routes/atendimento.py.
+Restrições:
+- Sem libs novas; use time.sleep e contadores simples.
+- Retornar erro amigável após esgotar tentativas, mantendo o esquema atual de resposta.
+- Logar tentativas com req_id.
+Formato:
+- Patch unified diff APENAS de app/routes/atendimento.py.
+- Breve explicação de como configurar tempos de backoff (constantes no topo do arquivo).
+
+
+7) Checklist de revisão antes do deploy
+
+Faça uma revisão de código (app/routes/atendimento.py) com foco em:
+- Contratos preservados (assinaturas, formatos de retorno).
+- Impacto nos fluxos do Assistente Modular (sem mudanças semânticas inesperadas).
+- Tratamento de erros consistente e logs suficientes para depurar.
+- Riscos de regressão e passos de teste manual (curl) para 3 cenários críticos.
+Formato:
+- Checklist marcável (markdown) + notas objetivas por item.
+
+
+8) Gerar patch + testes manuais (curl)
+
+Preciso do patch em app/routes/atendimento.py para <DESCRICAO_CURTA>.
+Inclua no final um bloco “TESTES MANUAIS (curl)” com 3 a 5 comandos curl prontos para colar, cobrindo:
+- Caso feliz
+- Campo obrigatório faltando
+- Erro da integração externa (simulado)
+Formato: patch unified diff + bloco de testes.
+
+
+9) Documentar função (docstring + exemplos)
+Adicione docstrings estilo Google às funções <LISTA> em app/routes/atendimento.py, incluindo:
+- Purpose
+- Args
+- Returns
+- Raises (se aplicável)
+- 1 exemplo mínimo de chamada/retorno (em comentário)
+NÃO modifique a lógica. Saída: patch unified diff do arquivo.
+
+
+10) Refactor micro (limpeza segura)
+Faça um refactor micro em app/routes/atendimento.py:
+- Eliminar código morto, renomear variáveis internas para clareza, extrair helpers privados (prefixo _), sem mudar I/O.
+- Rodar “diff mínimo”: apenas o necessário para legibilidade e manutenção.
+Formato: patch unified diff + 3 bullets sobre riscos mitigados.
+
+Bônus — “Só o diff, por favor”
+
+RESPOSTA APENAS: patch unified diff do arquivo alvo. Não inclua texto extra.
+
+
