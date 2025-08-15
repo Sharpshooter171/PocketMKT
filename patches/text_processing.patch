@@ -1,0 +1,14 @@
+--- a/app/routes/text_processing.py
++++ b/app/routes/text_processing.py
+@@
+-    # --- Intenções detalhadas (priorize ordem do fluxo!)
++    # --- Intenções detalhadas (priorize ordem do fluxo!)
+     intencoes = []
++    # Cliente relatando caso (não confundir com status_processo)
++    if re.search(r'(fui demitid[oa]|sem justa causa|meus direitos|tive um acidente|preciso de ajuda|me aconteceu|relato|direito do consumidor|problema no trabalho)', text, re.IGNORECASE):
++        intencoes.append("relato_caso")
+     if re.search(r'(agendar|marcar|consulta|hor[aá]rio|conversa|agenda|atendimento)', text, re.IGNORECASE):
+         intencoes.append("agendamento")
+@@
+     resultado["intencao"] = intencoes
+@@
