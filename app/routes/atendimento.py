@@ -1,3 +1,13 @@
+# Bootstrapping de path para execução local/AWS (antes de qualquer import de 'app')
+import os, sys
+try:
+    import app  # testa se o pacote já está acessível
+except Exception:
+    _FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+    _PROJECT_ROOT = os.path.abspath(os.path.join(_FILE_DIR, "..", ".."))  # .../PocketMKT
+    if _PROJECT_ROOT not in sys.path:
+        sys.path.insert(0, _PROJECT_ROOT)
+
 from app.routes.text_processing import (
     fluxo_onboarding_advogado,
     fluxo_aprovacao_peticao,
@@ -1546,8 +1556,7 @@ def processar_atendimento():
 
             # Humanização e footer para advogado (inclusive quando preview foi usado)
             if resposta_texto:
-                resposta_texto = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado
-
+                resposta_texto = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
         # ---------------- Fluxos CLIENTE (Google + detecção híbrida) ------------------
         elif tipo_usuario == 'cliente':
             # ✅ Modo simulado quando faltar OAuth (sem redirect)
@@ -1674,7 +1683,8 @@ def processar_atendimento():
                         fluxo_detectado = "consulta_andamento_cliente"
 
             elif intent == "agendar_consulta_cliente":
-                # ...existing code...
+                # Placeholder para evitar IndentationError até implementar o bloco
+                pass
 
             elif intent == "enviar_documento_cliente":
                 # 1) Se usuário respondeu "confirmar/cancelar", trata
@@ -1859,3 +1869,7 @@ def processar_atendimento():
             "fluxo": 'erro_interno',
             "erro": str(e)
         }), 200
+
+# Execução direta (smoke test) – permite rodar local/AWS sem quebrar imports
+if __name__ == "__main__":
+    print("atendimento.py carregado. Suba o servidor Flask via 'flask run' ou o app principal.")
