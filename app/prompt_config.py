@@ -78,6 +78,27 @@ prompt_config = {
         "Atendente:"
     ),
 
+    "intent_classifier_prompt": (
+        "Classifique a intenção do usuário em UM rótulo da lista:\n"
+        "['relato_caso','consulta_andamento_cliente','agendar_consulta_cliente','enviar_documento_cliente',"
+        "'atualizar_cadastro_cliente','alterar_cancelar_agendamento','fallback']\n\n"
+        "Responda APENAS com o rótulo.\n\n"
+        "Usuário: Quero saber como está meu processo\n"
+        "Rótulo: consulta_andamento_cliente\n\n"
+        "Usuário: Fui demitido e preciso de ajuda\n"
+        "Rótulo: relato_caso\n\n"
+        "Usuário: Posso marcar um horário amanhã às 10h?\n"
+        "Rótulo: agendar_consulta_cliente\n\n"
+        "Usuário: Segue o RG e o comprovante\n"
+        "Rótulo: enviar_documento_cliente\n\n"
+        "Usuário: Troquei de telefone\n"
+        "Rótulo: atualizar_cadastro_cliente\n\n"
+        "Usuário: Preciso desmarcar a consulta de amanhã\n"
+        "Rótulo: alterar_cancelar_agendamento\n\n"
+        "Usuário: oi\n"
+        "Rótulo: fallback\n"
+    ),
+
     # --- PARA CADA FUNÇÃO, ADICIONE UM PROMPT FEW-SHOT DEDICADO ---
     "fluxo_onboarding_advogado_prompt": (
         "Você é um assistente para onboarding de advogados, coletando dados cadastrais.\n\n"

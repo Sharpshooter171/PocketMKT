@@ -29,10 +29,13 @@ def fluxo_consulta_andamento_cliente(mensagem):
 def fluxo_enviar_documento_cliente(mensagem):
     """Detecta envio de documento pelo cliente."""
     texto = unidecode(mensagem.lower())
-    if any(palavra in texto for palavra in [
-        "enviei documento", "segue anexo", "enviei meu rg", "comprovante de endereco",
-        "enviei cnh", "enviei meus documentos", "segue comprovante", "segue documento"
-    ]):
+    gatilhos = [
+        "enviei documento","segue anexo","enviei meu rg","comprovante de endereco","enviei cnh",
+        "enviei meus documentos","segue comprovante","segue documento",
+        "to mandando","tô mandando","acabei de enviar","acabei de anexar","anexei","segue a foto",
+        "enviei a foto","mandei o pdf","mandei o arquivo","segue arquivo","segue pdf","enviei comprovante"
+    ]
+    if any(p in texto for p in gatilhos):
         return {"acao": "enviar_documento_cliente"}
     return None
 
@@ -42,7 +45,8 @@ def fluxo_agendar_consulta_cliente(mensagem):
     gatilhos = [
         "agendar consulta","quero marcar","preciso de uma reuniao","agendar reuniao","marcar consulta",
         "marcar horario","agendar atendimento","marcacao","agendamento","agenda",
-        "consultar horario","amanha","hoje","sexta","semana que vem"
+        "consultar horario","amanha","hoje","sexta","semana que vem",
+        "bater um papo","falar com o advogado","me encaixar","encaixe","um horario pra mim"
     ]
     if (
         any(p in texto for p in gatilhos)
@@ -91,7 +95,12 @@ def fluxo_notificacao_cliente(mensagem):
 
 def fluxo_alterar_cancelar_agendamento(mensagem):
     """Detecta pedido para alterar ou cancelar agendamento."""
-    if "cancelar agendamento" in mensagem.lower() or "alterar horário" in mensagem.lower():
+    t = unidecode(mensagem.lower())
+    gatilhos = [
+        "cancelar agendamento","alterar horario","remarcar","desmarcar","adiar",
+        "trocar horario","mudar o horario","adiar consulta","reagendar","remarcar consulta"
+    ]
+    if any(g in t for g in gatilhos):
         return {"acao": "alterar_cancelar_agendamento"}
     return None
 
@@ -348,6 +357,11 @@ def analisar_texto(text):
     resultado["emails"] = re.findall(r'[\w\.-]+@[\w\.-]+', text)
     resultado["oab"] = re.findall(r'\d{3,10}\s*[A-Z]{2}', text, re.IGNORECASE)
     resultado["valores"] = re.findall(r'R?\$\s?\d{1,3}(\.\d{3})*,?\d*', text)
+
+    # --- Identificadores brasileiros
+    resultado["cpf"] = re.findall(r'\b\d{3}\.??\d{3}\.??\d{3}-?\d{2}\b', text)
+    resultado["cnpj"] = re.findall(r'\b\d{2}\.??\d{3}\.??\d{3}/?\d{4}-?\d{2}\b', text)
+    resultado["telefones"] = re.findall(r'\+?55?\s?\(?\d{2}\)?\s?\d{4,5}-?\d{4}', text)
     resultado["documentos"] = re.findall(r'(procuração|contrato|petiç[ãa]o|documento[s]?|certidão|RG|CPF|carteira de trabalho)', text, re.IGNORECASE)
     resultado["pagamentos"] = re.findall(r'(pix|boleto|parcelamento|permuta|cart[aã]o|dinheiro|transfer[eê]ncia)', text, re.IGNORECASE)
     resultado["areas_direito"] += re.findall(r'(civil|trabalhista|fam[ií]lia|consumidor|imobili[aá]rio|previdenci[aá]rio|penal|empresarial|tribut[áa]rio)', text, re.IGNORECASE)

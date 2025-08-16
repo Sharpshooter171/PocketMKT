@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 try:
     from zoneinfo import ZoneInfo  # Python 3.9+
 except Exception:
+    pass
     ZoneInfo = None  # se faltar, cairemos em simulação
 
 def _get_calendar_service_from_sheets():
@@ -136,22 +137,23 @@ def _listar_slots_disponiveis(dias=7, hora_inicio=9, hora_fim=18, duracao_min=60
 # ==== FIM HELPERS AGENDA ====
 
 # ==== HUMANIZAÇÃO – TONS E FECHOS ====
-def _humanize_pre(mensagem, tipo_usuario):
-    t = (mensagem or "").strip().lower()
-    if is_saudacao(mensagem):
-        if tipo_usuario == "cliente":
-            return "Olá! 😊 Seja bem-vindo(a). Vou te ajudar com o que precisar."
-        else:
-            return "Olá, doutor(a)! 👋 Como posso ajudar hoje?"
-    # se não for saudação, não força greeting
-    return None
-
 def _humanize_during(texto_base):
     # garante linguagem clara + convite à continuidade
     if not texto_base:
         return "Posso ajudar com seu caso, seu agendamento ou seus documentos."
     anexo = "\n\nSe algo não estiver claro, me avise e eu reformulo."
     return texto_base if texto_base.strip().endswith(("?", ".", "!")) else texto_base + anexo
+
+# Pequeno pre-ack para não quebrar chamadas; pode ser evoluído depois
+def _humanize_pre(mensagem, tipo_usuario):
+    try:
+        msg = (mensagem or "").strip()
+        if not msg:
+            return ""
+        # resposta neutra curta; mantemos vazio para não poluir interações
+        return ""
+    except Exception:
+        return ""
 
 _HUMANIZED_FOOTERS = {
     "relato_caso": "\n\n📌 Próximos passos: registrarei seu relato no CRM e o advogado responsável vai revisar. Se quiser, já posso sugerir horários para atendimento.",
@@ -166,6 +168,20 @@ def _humanize_post(texto, fluxo):
         return texto
     return f"{texto}\n{rodape}"
 # ==== FIM HUMANIZAÇÃO ====
+
+# Quais intents o assistente pode executar sem preview/confirm?
+AUTO_EXEC_POLICY = {
+    "enviar_documento_cliente": True,
+    "atualizar_cadastro_cliente": True,
+    "consulta_andamento_cliente_open_task": True,  # abrir tarefa quando faltam dados
+    "followup_cliente": True,
+    "enviar_resumo_caso": True,
+    # intents que SEMPRE exigem aprovação do advogado:
+    "agendar_consulta_cliente": False,
+    "aprovacao_peticao": False,
+    "decisao_permuta": False,
+    "status_negociacao": False,
+}
 
 # ==== LLM PARA REDAÇÃO EDUCADA (FEW-SHOT) ====
 def _llm_reply(intent_key, user_message):
@@ -194,83 +210,167 @@ def _llm_reply(intent_key, user_message):
         }
         prompt_key = key_map.get(intent_key) or key_map["system"]
         system_prompt = prompt_config.get(prompt_key) or prompt_config.get("system_prompt", "")
-        # reforço de segurança: sem parecer jurídico
-        guard = "\n\nRegras: seja cordial, conciso e NUNCA forneça aconselhamento jurídico ou interpretações legais."
-        prompt = montar_prompt_instruct(system_prompt + guard, user_message)
-        resp = get_llama_response(prompt)
-        # higiene mínima
-        if not isinstance(resp, str) or len(resp.strip()) < 4:
-            return None
-        return resp.strip()
+
     except Exception:
         return None
+
+    # ==== LLM NLU – INTERPRETAR DECISÃO DO ADVOGADO SOBRE AGENDAMENTO ====
+    def _interpretar_decisao_advogado(mensagem):
+        """
+        Usa LLM para classificar a intenção do advogado em:
+          - acao: "aprovar" | "recusar" | "sugerir" | "nenhum"
+          - inicio_iso, fim_iso (opcionais, se houver horário sugerido)
+          - observacao (texto livre)
+        """
+        try:
+            from app.prompt_config import montar_prompt_instruct
+            from app.ollama_service import get_llama_response
+            system = (
+                "Você recebe uma mensagem escrita por um advogado sobre um pedido de agendamento.\n"
+                "Classifique em JSON com as chaves: acao ('aprovar'|'recusar'|'sugerir'|'nenhum'), "
+                "inicio_iso (RFC3339), fim_iso (RFC3339), observacao.\n"
+                "Se sugerir horário, normalize para America/Sao_Paulo e gere intervalos de 60 minutos "
+                "a partir do contexto (ex.: 'amanhã às 10h' => inicio 10:00, fim 11:00). "
+                "Se não houver horário claro, deixe vazio."
+            )
+            user = f"Mensagem do advogado: {mensagem}"
+            prompt = montar_prompt_instruct(system, user)
+            raw = get_llama_response(prompt)
+            import json
+            data = json.loads((raw or "").strip())
+            acao = str(data.get("acao", "nenhum")).lower()
+            if acao not in {"aprovar", "recusar", "sugerir"}:
+                acao = "nenhum"
+            return {
+                "acao": acao,
+                "inicio_iso": (data.get("inicio_iso") or "").strip(),
+                "fim_iso": (data.get("fim_iso") or "").strip(),
+                "observacao": (data.get("observacao") or "").strip(),
+            }
+        except Exception:
+            return {"acao": "nenhum", "inicio_iso": "", "fim_iso": "", "observacao": ""}
+
+    # ==== FIM LLM NLU ====
+
+    # ==== HELPERS CRM – BUSCAR/ATUALIZAR PEDIDO DE AGENDAMENTO ====
+    def _buscar_pedido_agendamento_pendente(svc, sheet_id, numero):
+        """
+        Procura na aba Tarefas a última linha com:
+          Col B == 'Pedido de agendamento', Col F == 'Pendente', Col D == numero.
+        Retorna (row_index, label, inicio_iso, fim_iso) ou (None, None, '', '').
+        """
+        try:
+            resp = svc.spreadsheets().values().get(
+                spreadsheetId=sheet_id, range="Tarefas!A:H"
+            ).execute()
+            vals = resp.get("values", [])
+            found = None
+            for i, row in enumerate(vals[1:], start=2):  # assume linha 1 é header (ou não; funciona igual)
+                b = (row[1] if len(row)>1 else "")
+                f = (row[5] if len(row)>5 else "")
+                d = (row[3] if len(row)>3 else "")
+                if b == "Pedido de agendamento" and f == "Pendente" and d == numero:
+                    found = (i, (row[2] if len(row)>2 else ""), (row[6] if len(row)>6 else ""), (row[7] if len(row)>7 else ""))
+            return found if found else (None, None, "", "")
+        except Exception:
+            return (None, None, "", "")
+
+    def _atualizar_status_tarefa(svc, sheet_id, row_index, novo_status):
+        try:
+            svc.spreadsheets().values().update(
+                spreadsheetId=sheet_id,
+                range=f"Tarefas!F{row_index}",
+                valueInputOption="RAW",
+                body={"values":[[novo_status]]}
+            ).execute()
+            return True
+        except Exception:
+            return False
+    # ==== FIM HELPERS CRM ====
+
+    # ==== EXECUTOR – CRIA EVENTO (APÓS CONFIRMAÇÃO DO ADVOGADO) ====
+    def _exec_criar_evento_aprovado(numero, inicio_iso, fim_iso, descricao, data_ctx):
+        """
+        Usa criar_evento_calendar(...) se OAuth ok; reflete no CRM
+        """
+        try:
+            from app.google_service import get_google_sheets_service
+            svc = get_google_sheets_service()
+            oauth_ok = svc is not None
+            if not oauth_ok:
+                return "✅ Evento aprovado e registrado (simulado)."
+
+            nome_escr = f"Escritório {(data_ctx.get('escritorio_id') or 'Geral').title()}"
+            arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+            if not os.path.exists(arq):
+                return "✅ Evento aprovado (sem CRM configurado)."
+
+            with open(arq,'r') as f:
+                sheet_id = f.read().strip()
+
+            # Cria o evento
+            ev_id, ev_link = criar_evento_calendar(
+                titulo="Consulta jurídica",
+                inicio_iso=inicio_iso,
+                fim_iso=fim_iso,
+                convidados_emails=None,
+                descricao=f"Agendamento aprovado para {numero}. {descricao or ''}".strip()
+            )
+
+            # Atualiza a tarefa para 'Aprovado'
+            row_index, _, _, _ = _buscar_pedido_agendamento_pendente(svc, sheet_id, numero)
+            if row_index:
+                _atualizar_status_tarefa(svc, sheet_id, row_index, "Aprovado")
+
+            return "✅ Agendamento aprovado e evento criado no Calendar." if ev_id else "⚠️ Tentei aprovar, mas não consegui criar o evento agora."
+        except Exception:
+            return "✅ Agendamento aprovado (simulado)."
+    # ==== FIM EXECUTOR ====
+
+    # reforço de segurança: sem parecer jurídico
+    guard = "\n\nRegras: seja cordial, conciso e NUNCA forneça aconselhamento jurídico ou interpretações legais."
+    prompt = montar_prompt_instruct(system_prompt + guard, user_message)
+    resp = get_llama_response(prompt)
+    # higiene mínima
+    if not isinstance(resp, str) or len(resp.strip()) < 4:
+        return None
+    return resp.strip()
 # ==== FIM LLM REDAÇÃO ====
 
 
-# ==== HUMANIZAÇÃO – TONS E FECHOS ====
-def _humanize_pre(mensagem, tipo_usuario):
-    if is_saudacao(mensagem):
-        if tipo_usuario == "cliente":
-            return "Olá! 😊 Seja bem-vindo(a). Vou te ajudar com o que precisar."
-        else:
-            return "Olá, doutor(a)! 👋 Como posso ajudar hoje?"
-    return None
-
-def _humanize_during(texto_base):
-    if not texto_base:
-        return "Posso ajudar com seu caso, seu agendamento ou seus documentos."
-    anexo = "\n\nSe algo não estiver claro, me avise e eu reformulo."
-    return texto_base if texto_base.strip().endswith(("?", ".", "!")) else (texto_base + anexo)
-
-_HUMANIZED_FOOTERS = {
-    "relato_caso": "\n\n📌 Próximos passos: registrarei seu relato no CRM e o advogado responsável vai revisar. Se quiser, já posso sugerir horários para atendimento.",
-    "consulta_andamento_cliente": "\n\n📌 Assim que houver novidade, te avisamos por aqui.",
-    "agendar_consulta_cliente": "\n\n📌 Após a aprovação do advogado, confirmamos o horário e te enviamos o convite.",
-    "enviar_documento_cliente": "\n\n📌 Assim que o documento entrar no CRM, o advogado consegue acessá-lo na pasta do seu caso."
-}
-def _humanize_post(texto, fluxo):
-    rodape = _HUMANIZED_FOOTERS.get(fluxo, "\n\nPosso ajudar com mais alguma coisa?")
-    if rodape.strip() in (texto or ""):
-        return texto
-    return f"{texto}\n{rodape}"
-# ==== FIM HUMANIZAÇÃO ====
-
-# ==== LLM PARA REDAÇÃO EDUCADA (FEW-SHOT) ====
-def _llm_reply(intent_key, user_message):
+# LLM NLU – interpretar decisão do advogado (agendamento)
+def _interpretar_decisao_advogado(mensagem):
     """
-    Usa few-shots do prompt_config para redigir respostas educadas por fluxo.
-    Se algo falhar, retorna None e o código cai no texto fixo atual.
+    Classifica mensagem do advogado sobre um pedido de agendamento.
+    Retorna: {acao: 'aprovar'|'recusar'|'sugerir'|'nenhum', inicio_iso, fim_iso, observacao}
     """
     try:
-        from app.prompt_config import prompt_config, montar_prompt_instruct
+        from app.prompt_config import montar_prompt_instruct
         from app.ollama_service import get_llama_response
-        key_map = {
-            # cliente
-            "relato_caso": "fluxo_relato_caso_prompt",
-            "consulta_andamento_cliente": "fluxo_consulta_andamento_cliente_prompt",
-            "enviar_documento_cliente": "fluxo_enviar_documento_cliente_prompt",
-            "agendar_consulta_cliente": "fluxo_agendar_consulta_cliente_prompt",
-            "atualizar_cadastro_cliente": "fluxo_atualizar_cadastro_cliente_prompt",
-            # advogado
-            "onboarding": "fluxo_onboarding_advogado_prompt",
-            "aprovacao_peticao": "fluxo_aprovacao_peticao_prompt",
-            "alerta_prazo": "fluxo_alerta_prazo_prompt",
-            "honorarios": "fluxo_honorarios_prompt",
-            "documento_juridico": "fluxo_documento_juridico_prompt",
-            # fallback
-            "system": "system_prompt",
+        system = (
+            "Você recebe uma mensagem escrita por um advogado sobre um pedido de agendamento.\n"
+            "Classifique em JSON com as chaves: acao ('aprovar'|'recusar'|'sugerir'|'nenhum'), "
+            "inicio_iso (RFC3339), fim_iso (RFC3339), observacao.\n"
+            "Se sugerir horário, normalize para America/Sao_Paulo e gere intervalos de 60 minutos "
+            "a partir do contexto (ex.: 'amanhã às 10h' => inicio 10:00, fim 11:00). "
+            "Se não houver horário claro, deixe vazio."
+        )
+        user = f"Mensagem do advogado: {mensagem}"
+        prompt = montar_prompt_instruct(system, user)
+        raw = get_llama_response(prompt)
+        import json
+        data = json.loads((raw or "").strip())
+        acao = str(data.get("acao", "nenhum")).lower()
+        if acao not in {"aprovar", "recusar", "sugerir"}:
+            acao = "nenhum"
+        return {
+            "acao": acao,
+            "inicio_iso": (data.get("inicio_iso") or "").strip(),
+            "fim_iso": (data.get("fim_iso") or "").strip(),
+            "observacao": (data.get("observacao") or "").strip(),
         }
-        prompt_key = key_map.get(intent_key) or "system"
-        system_prompt = prompt_config.get(prompt_key) or prompt_config.get("system_prompt", "")
-        guard = "\n\nRegras: seja cordial, objetivo e NUNCA forneça aconselhamento jurídico."
-        prompt = montar_prompt_instruct(system_prompt + guard, user_message)
-        resp = get_llama_response(prompt)
-        if not isinstance(resp, str) or len(resp.strip()) < 4:
-            return None
-        return resp.strip()
     except Exception:
-        return None
-# ==== FIM LLM REDAÇÃO ====
+        return {"acao": "nenhum", "inicio_iso": "", "fim_iso": "", "observacao": ""}
 
 
 # Substitui import direto por try/except com mocks
@@ -685,6 +785,101 @@ def detect_intent(texto):
 
     return "fluxo_nao_detectado"
 
+
+def _rank_intents(t: str):
+    """Score heurístico leve para desempatar intents por sinais (regex/keywords)."""
+    t = unidecode((t or "").lower().strip())
+    score = {
+        "consulta_andamento_cliente": 0,
+        "agendar_consulta_cliente": 0,
+        "enviar_documento_cliente": 0,
+        "relato_caso": 0,
+        "atualizar_cadastro_cliente": 0,
+        "alterar_cancelar_agendamento": 0,
+    }
+
+    # Sinais fortes
+    if _RE_NUM_PROC.search(t):
+        score["consulta_andamento_cliente"] += 3
+    if any(k in t for k in ["rg", "cnh", "comprovante", "anexo", "pdf", "documento", "foto"]):
+        score["enviar_documento_cliente"] += 3
+    if any(k in t for k in ["agendar", "marcar", "remarcar", "horario", "agenda", "consulta", "reuniao", "reunião"]):
+        score["agendar_consulta_cliente"] += 2
+    if any(k in t for k in ["cancelar agendamento", "desmarcar", "reagendar", "remarcar", "adiar", "trocar horario"]):
+        score["alterar_cancelar_agendamento"] += 2
+    if any(k in t for k in ["mudei de endereco", "novo telefone", "atualizar cadastro", "troquei de telefone", "atualizar telefone", "novo endereco"]):
+        score["atualizar_cadastro_cliente"] += 2
+
+    # Sinais fracos de relato
+    if any(k in t for k in ["demitid", "direito", "indeniza", "acidente", "me aconteceu", "preciso de ajuda", "meus direitos"]):
+        score["relato_caso"] += 2
+
+    # Horário/data/dia da semana -> agendar
+    if _re.search(r"\b(\d{1,2}(:\d{2})?\s?(h|hrs|horas)?)\b", t) or \
+       _re.search(r"\b(\d{1,2}/\d{1,2}(/\d{2,4})?)\b", t) or \
+       _re.search(r"\b(segunda|terca|terça|quarta|quinta|sexta|sabado|sábado|domingo)\b", t, _re.IGNORECASE):
+        score["agendar_consulta_cliente"] += 1
+
+    # Escolhe o maior score (empate -> None)
+    best = max(score, key=score.get)
+    return best if score[best] > 0 and list(score.values()).count(score[best]) == 1 else None
+
+
+def _detect_with_nlu_llm(texto: str):
+    """
+    Orquestra detecção: 1) NLU via text_processing fluxos; 2) score regex; 3) classificador few-shot LLM.
+    Retorna um dos rótulos: relato_caso, consulta_andamento_cliente, agendar_consulta_cliente,
+    enviar_documento_cliente, atualizar_cadastro_cliente, alterar_cancelar_agendamento, fluxo_nao_detectado
+    """
+    t = (texto or "")
+    # 1) NLU via text_processing (cliente)
+    try:
+        from app.routes.text_processing import (
+            fluxo_agendar_consulta_cliente, fluxo_enviar_documento_cliente,
+            fluxo_relato_caso, fluxo_consulta_andamento_cliente,
+            fluxo_atualizar_cadastro_cliente, fluxo_alterar_cancelar_agendamento,
+        )
+        if fluxo_consulta_andamento_cliente(t):
+            return "consulta_andamento_cliente"
+        if fluxo_agendar_consulta_cliente(t):
+            return "agendar_consulta_cliente"
+        if fluxo_enviar_documento_cliente(t):
+            return "enviar_documento_cliente"
+        if fluxo_atualizar_cadastro_cliente(t):
+            return "atualizar_cadastro_cliente"
+        if fluxo_alterar_cancelar_agendamento(t):
+            return "alterar_cancelar_agendamento"
+        if fluxo_relato_caso(t):
+            return "relato_caso"
+    except Exception:
+        pass
+
+    # 2) Score por regex/keywords
+    guess = _rank_intents(t)
+    if guess:
+        return guess
+
+    # 3) Tie-breaker com LLM few-shot (prompt_config["intent_classifier_prompt"])
+    try:
+        from app.prompt_config import prompt_config, montar_prompt_instruct
+        from app.ollama_service import get_llama_response
+        system = prompt_config.get("intent_classifier_prompt", "")
+        prompt = montar_prompt_instruct(system, t)
+        label = (get_llama_response(prompt) or "").strip()
+        if label in {
+            "relato_caso",
+            "consulta_andamento_cliente",
+            "agendar_consulta_cliente",
+            "enviar_documento_cliente",
+            "atualizar_cadastro_cliente",
+            "alterar_cancelar_agendamento",
+        }:
+            return label
+    except Exception:
+        pass
+
+    return "fluxo_nao_detectado"
+
 def processar_relato_caso(texto_ou_audio, telefone_cliente, segmento, tipo_arquivo=None):
     """
     Processa relato de caso (texto ou áudio) e registra na planilha
@@ -1025,7 +1220,7 @@ def _check_confirm(numero_whats, texto_lower):
         try:
             msg_ok = pend["exec"]() or "✅ Feito!"
             processar_atendimento._pending.pop(numero_whats, None)
-            return f"{msg_ok}\n\nPrecisa de mais alguma coisa?"
+            return msg_ok
         except Exception as e:
             processar_atendimento._pending.pop(numero_whats, None)
             return f"❌ Falha ao executar: {e}"
@@ -1035,19 +1230,29 @@ def _check_confirm(numero_whats, texto_lower):
     return None
 
 
-# @atendimento_bp.route('/processar_atendimento', methods=['POST'])
-# def processar_atendimento():
-#     """
-#     Endpoint principal para processar atendimento legal com LLM
-#     Suporta texto e áudio (Whisper), extrai dados estruturados e registra caso
-#     """
-#     try:
-#         print("🚀 === INÍCIO DO ATENDIMENTO LEGAL ===")
-#         data = request.get_json() or {}
-        
-#         # Extrair informações da requisição
-#         mensagem = data.get('mensagem', '')
-#         audio_url = data.get('audio_url', '')
+def _footer_advogado():
+    """Rodapé curto com dicas para o advogado no fast-path."""
+    return ("\n\nDicas: responda 'confirmar' para executar ou 'cancelar' para descartar. "
+            "Você também pode dizer, por exemplo: 'sugerir terça 14h', 'aprovar' ou 'recusar'.")
+
+# Helper para decidir auto-execução vs. proposta com confirmação
+def _auto_or_propose(intent_key, numero, preview, exec_cb, ttl=15):
+    from datetime import datetime, timedelta
+    if AUTO_EXEC_POLICY.get(intent_key):
+        try:
+            msg_ok = exec_cb() or "✅ Feito!"
+            return msg_ok
+        except Exception as e:
+            return f"❌ Falha ao executar: {e}"
+    # fallback: precisa confirmar (replica o comportamento de _propose)
+    if not hasattr(processar_atendimento, "_pending"):
+        processar_atendimento._pending = {}
+    processar_atendimento._pending[numero] = {
+        "exp": datetime.utcnow() + timedelta(minutes=ttl),
+        "preview": preview,
+        "exec": exec_cb,
+    }
+    return f"{preview}\n\nResponda *confirmar* para executar, ou *cancelar* para descartar."
 
 @atendimento_bp.route('/processar_atendimento', methods=['POST'])
 def processar_atendimento():
@@ -1113,6 +1318,76 @@ def processar_atendimento():
             svc = get_google_sheets_service()
             oauth_ok = svc is not None
 
+            # Trata confirma/cancela de propostas pendentes (preview já enviado antes)
+            conf = _check_confirm(numero, (mensagem or '').lower())
+            if conf:
+                fluxo_detectado = "aprovar_agendamento_advogado"
+                resp = _humanize_post(_humanize_during(conf), fluxo_detectado) + _footer_advogado()
+                payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "rule"}
+                return jsonify(payload), 200
+
+            # 0) NLU: o advogado está aprovando/recusando/sugerindo horário?
+            decisao = _interpretar_decisao_advogado(mensagem)
+            if decisao.get("acao") in {"aprovar","recusar","sugerir"}:
+                # Buscar pedido pendente desse número
+                try:
+                    nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                    arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+                    sheet_id = None
+                    if os.path.exists(arq):
+                        with open(arq,'r') as f: sheet_id = f.read().strip()
+                    if not (svc and sheet_id):
+                        # Sem CRM: ainda assim responde humano
+                        if decisao["acao"] == "recusar":
+                            resposta_texto = "✅ Pedido de agendamento **recusado**. Não registrarei evento."
+                            fluxo_detectado = "aprovar_agendamento_advogado"
+                            resp = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
+                            payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                            return jsonify(payload), 200
+
+                    row_index, label, inicio_iso_salvo, fim_iso_salvo = _buscar_pedido_agendamento_pendente(svc, sheet_id, numero)
+                    if not row_index:
+                        # Nenhum pedido pendente para esse cliente
+                        resposta_texto = "Não encontrei pedido de agendamento pendente para este cliente. Posso registrar um novo pedido?"
+                        fluxo_detectado = "aprovar_agendamento_advogado"
+                        resp = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
+                        payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                        return jsonify(payload), 200
+
+                    acao = decisao["acao"]
+                    # Se o advogado recusou
+                    if acao == "recusar":
+                        _atualizar_status_tarefa(svc, sheet_id, row_index, "Recusado")
+                        resposta_texto = "✅ Pedido de agendamento **recusado**. Informe ao cliente um novo período desejável ou peça para ele sugerir outros horários."
+                        fluxo_detectado = "aprovar_agendamento_advogado"
+                        resp = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
+                        payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                        return jsonify(payload), 200
+
+                    # Se aprovou ou sugeriu novo horário
+                    # Preferência: horários enviados pela LLM; senão, usa os salvos; senão, pega 1º livre atual
+                    inicio_iso = decisao.get("inicio_iso") or inicio_iso_salvo
+                    fim_iso    = decisao.get("fim_iso") or fim_iso_salvo
+                    if not (inicio_iso and fim_iso):
+                        slots = _listar_slots_disponiveis(dias=7, hora_inicio=9, hora_fim=18, duracao_min=60, max_slots=1)
+                        if slots:
+                            inicio_iso = slots[0]["inicio_iso"]
+                            fim_iso = slots[0]["fim_iso"]
+
+                    # Preview → confirmar → executar (mesmo padrão de segurança)
+                    human_preview = f"Vou **criar o evento** de consulta para o cliente {numero} no horário: *{label or 'definido'}*. Confirmar?"
+                    def _exec_adv_criar():
+                        return _exec_criar_evento_aprovado(numero, inicio_iso, fim_iso, label, data)
+
+                    resposta_texto = _propose(numero, human_preview, _exec_adv_criar)
+                    fluxo_detectado = "aprovar_agendamento_advogado"
+                    resp = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
+                    payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                    return jsonify(payload), 200
+                except Exception:
+                    # se algo falhar, cai pro fluxo normal do advogado
+                    pass
+
             try:
                 resultado = processar_mensagem_advogado(mensagem)
                 if isinstance(resultado, dict):
@@ -1125,6 +1400,8 @@ def processar_atendimento():
             # ✅ Respostas com palavras‑chave para os fluxos de advogado
             if fluxo_detectado == 'onboarding':
                 preview = "Vou preparar seu **CRM** (abas: Clientes, Casos, Tarefas, Financeiro, Documentos, Parceiros). Confirmar?"
+                # Polimento LLM
+                preview = _llm_reply("onboarding", mensagem) or preview
 
                 def _exec_onboarding():
                     try:
@@ -1151,8 +1428,10 @@ def processar_atendimento():
                     except Exception:
                         return "✅ CRM preparado."
                 resposta_texto = _propose(numero, preview, _exec_onboarding)
+
             elif fluxo_detectado in ('peticao_aprovada', 'aprovacao_peticao'):
                 preview = "📄 **Petição** aprovada. Posso criar uma **tarefa** 'Protocolar petição' para hoje no CRM. Confirmar?"
+                preview = _llm_reply("aprovacao_peticao", mensagem) or preview
 
                 def _exec_tarefa_pet():
                     try:
@@ -1175,8 +1454,10 @@ def processar_atendimento():
                     except Exception:
                         return "✅ Tarefa registrada."
                 resposta_texto = _propose(numero, preview, _exec_tarefa_pet)
+
             elif fluxo_detectado in ('lembrete_prazo', 'alerta_prazo'):
                 preview = "⏰ Posso **criar um lembrete** no CRM para o prazo/audiência indicado. Confirmar?"
+                preview = _llm_reply("alerta_prazo", mensagem) or preview
 
                 def _exec_lembrete():
                     try:
@@ -1199,8 +1480,10 @@ def processar_atendimento():
                     except Exception:
                         return "✅ Lembrete registrado."
                 resposta_texto = _propose(numero, preview, _exec_lembrete)
+
             elif fluxo_detectado in ('documento_juridico', 'revisao_documento'):
                 preview = "🧩 Posso **buscar ou gerar** o modelo solicitado e salvar em **Modelos de Documentos** no Drive. Confirmar?"
+                preview = _llm_reply("documento_juridico", mensagem) or preview
 
                 def _exec_modelo():
                     try:
@@ -1231,6 +1514,13 @@ def processar_atendimento():
                     except Exception:
                         return "✅ Modelo criado."
                 resposta_texto = _propose(numero, preview, _exec_modelo)
+
+            elif fluxo_detectado == 'honorarios':
+                # Decisão “livre” polida por LLM
+                resposta_texto = _llm_reply("honorarios", mensagem) or (
+                    "Posso montar um resumo dos honorários, prazos e formas de pagamento para este caso."
+                )
+
             elif fluxo_detectado in (
                 'enviar_documento_cliente','consulta_andamento','pagamento_fora_padrao',
                 'indicacao','documento_pendente','status_negociacao','decisao_permuta',
@@ -1239,29 +1529,38 @@ def processar_atendimento():
                 'alterar_cancelar_agendamento','resumo_estatisticas','lembrete_audiencia',
                 'enviar_resumo_caso'
             ):
+                # Polimento LLM para respostas livres
                 resposta_texto = (
-                    "📌 Posso auxiliar com **documento**, **petição** ou **contrato**, além de "
-                    "acompanhar **prazos** e **audiências** do **processo**."
+                    _llm_reply("documento_juridico", mensagem)
+                    or "📌 Posso auxiliar com **documento**, **petição** ou **contrato**, além de acompanhar **prazos** e **audiências** do **processo**."
                 )
+
             elif fluxo_detectado == 'fluxo_nao_detectado':
                 resposta_texto = (
-                    "Como posso ajudar? Posso cuidar de **documento**/**petição**, enviar **modelo** de **contrato** "
-                    "ou monitorar **prazo**/**audiência**."
+                    _llm_reply("system", mensagem) or
+                    "Como posso ajudar? Posso cuidar de **documento**/**petição**, enviar **modelo** de **contrato** ou monitorar **prazo**/**audiência**."
                 )
+
             elif fluxo_detectado == 'erro_processar_advogado':
                 resposta_texto = "⚠️ Tive um erro ao processar. Pode repetir sua solicitação?"
-    
-        # ---------------- Fluxos CLIENTE (Google + detecção simples) ------------------
+
+            # Humanização e footer para advogado (inclusive quando preview foi usado)
+            if resposta_texto:
+                resposta_texto = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado
+
+        # ---------------- Fluxos CLIENTE (Google + detecção híbrida) ------------------
         elif tipo_usuario == 'cliente':
             # ✅ Modo simulado quando faltar OAuth (sem redirect)
             svc = get_google_sheets_service()
             oauth_ok = svc is not None
-    
-            # 1) DETECÇÃO (nova)
-            intent = detect_intent(mensagem)
+
+            # 1) DETECÇÃO (híbrido: NLU → regex score → LLM few-shot)
+            intent = _detect_with_nlu_llm(mensagem)
+
             # Normalização de rótulo legado
             if intent == "envio_documento_cliente":
                 intent = "enviar_documento_cliente"
+
             # 2) AÇÃO POR FLUXO (Google)
             if intent == "relato_caso":
                 if oauth_ok:
@@ -1295,7 +1594,7 @@ def processar_atendimento():
                         else "✅ Seu **relato** foi registrado na **planilha**.")
                 )
                 resposta_texto = _humanize_post(_humanize_during(base), fluxo_detectado)
-    
+
             elif intent == "consulta_andamento_cliente":
                 # 1) Se o usuário está confirmando algo pendente, executa
                 conf = _check_confirm(numero, mensagem.lower())
@@ -1343,7 +1642,7 @@ def processar_atendimento():
                                     or f"📄 Andamento do processo **{cnj}** no CRM: *{st}*. Precisa de mais alguma coisa?")
                             resposta_texto = _humanize_post(_humanize_during(base), "consulta_andamento_cliente")
                         else:
-                            # 3) Se não achou, propõe abrir tarefa para o advogado consultar
+                            # 3) Se não achou, abrir tarefa automaticamente (policy)
                             def _exec_tarefa():
                                 try:
                                     from app.google_service import get_google_sheets_service
@@ -1364,9 +1663,8 @@ def processar_atendimento():
                                     return "✅ Tarefa registrada no CRM para consulta do andamento."
                                 except Exception:
                                     return "✅ Tarefa registrada."
-                            preview = f"Não encontrei **{cnj}** no CRM. Posso abrir uma **tarefa** para o advogado te retornar?"
-                            preview = _llm_reply("consulta_andamento_cliente", mensagem) or preview
-                            resposta_texto = _propose(numero, preview, _exec_tarefa)
+                            preview = f"Não encontrei **{cnj}** no CRM. Vou abrir uma **tarefa** para o advogado te retornar."
+                            resposta_texto = _auto_or_propose("consulta_andamento_cliente_open_task", numero, preview, _exec_tarefa)
                     else:
                         # 4) Pede dados mínimos
                         base = (_llm_reply("consulta_andamento_cliente", mensagem)
@@ -1374,152 +1672,37 @@ def processar_atendimento():
                                 "Se não tiver agora, posso buscar pelo **nome completo** do titular e (se possível) **CPF** para localizar com mais precisão.")
                         resposta_texto = _humanize_post(_humanize_during(base), "consulta_andamento_cliente")
                         fluxo_detectado = "consulta_andamento_cliente"
-    
+
             elif intent == "agendar_consulta_cliente":
-                # 1) Se usuário respondeu "confirmar/cancelar", trata
-                conf = _check_confirm(numero, mensagem.lower())
-                if conf:
-                    fluxo_detectado = "agendar_consulta_cliente"
-                    resposta_texto = conf
-                else:
-                    # 2) Sugere horários livres reais do Calendar (ou simula se sem OAuth)
-                    slots = _listar_slots_disponiveis(dias=7, hora_inicio=9, hora_fim=18, duracao_min=60, max_slots=6)
+                # ...existing code...
 
-                    if slots:
-                        # Mostra os 3 primeiros para o cliente
-                        sug = [f"{i+1}) {s['label']}" for i, s in enumerate(slots[:3])]
-                        preview = (
-                            "Encontrei estes horários **disponíveis**:\n"
-                            f"- {sug[0] if len(sug)>0 else ''}\n"
-                            f"- {sug[1] if len(sug)>1 else ''}\n"
-                            f"- {sug[2] if len(sug)>2 else ''}\n\n"
-                            "Posso **registrar um pedido de agendamento** com o **primeiro horário** e enviar ao advogado para aprovar. "
-                            "Se preferir outro, você pode comentar depois e ajustamos. Confirmar?"
-                        )
-                    else:
-                        preview = (
-                            "Posso **registrar um pedido de agendamento** para o advogado analisar. "
-                            "Assim que ele aprovar, confirmaremos o horário com você. Confirmar?"
-                        )
-
-                    # Captura o primeiro slot (se houver) para registrar na tarefa
-                    slot_escolhido = slots[0] if slots else None
-
-                    def _exec_solicitacao_agendamento():
-                        try:
-                            from app.google_service import get_google_sheets_service
-                            svc = get_google_sheets_service()
-                            if not svc:
-                                return "✅ Pedido registrado (simulado)."
-                            nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
-                            arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
-                            if not os.path.exists(arq):
-                                return "✅ Pedido registrado (sem CRM configurado)."
-                            with open(arq,'r') as f:
-                                sheet_id = f.read().strip()
-
-                            # Garante aba Tarefas
-                            meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
-                            abatitulos = [s["properties"]["title"] for s in meta["sheets"]]
-                            if "Tarefas" not in abatitulos:
-                                svc.spreadsheets().batchUpdate(
-                                    spreadsheetId=sheet_id,
-                                    body={"requests":[{"addSheet":{"properties":{"title":"Tarefas"}}}]}
-                                ).execute()
-
-                            # Descrição do horário proposto (se houver)
-                            desc_horario = slot_escolhido["label"] if slot_escolhido else "Horário a definir"
-                            extra = ""
-                            if slot_escolhido:
-                                extra = f" | Sugestão: {slot_escolhido['label']}"
-
-                            # Registra pedido pendente de aprovação (sem criar evento ainda)
-                            svc.spreadsheets().values().append(
-                                spreadsheetId=sheet_id,
-                                range="Tarefas!A1",
-                                valueInputOption="RAW",
-                                body={"values":[[
-                                    datetime.now().strftime("%d/%m/%Y %H:%M"),
-                                    "Pedido de agendamento",
-                                    desc_horario,
-                                    numero,
-                                    "Origem: cliente",
-                                    "Pendente"
-                                ]]}
-                            ).execute()
-
-                            return "✅ Pedido de agendamento registrado no CRM para análise do advogado."
-                        except Exception:
-                            return "✅ Pedido registrado."
-                    # Polimento do preview com LLM
-                    preview = _llm_reply("agendar_consulta_cliente", mensagem) or preview
-                    resposta_texto = _propose(numero, preview, _exec_solicitacao_agendamento)
-                    fluxo_detectado = "agendar_consulta_cliente"
-                    # Humanização do retorno (quando houver resposta direta sem preview, ex.: confirmar)
-                    if conf:
-                        resposta_texto = _humanize_post(_humanize_during(resposta_texto), "agendar_consulta_cliente")
-
-                def _exec_solicitacao_agendamento():
-                    try:
-                        from app.google_service import get_google_sheets_service
-                        svc = get_google_sheets_service()
-                        if not svc:
-                            return "✅ Pedido registrado (simulado)."
-                        nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
-                        arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
-                        if not os.path.exists(arq):
-                            return "✅ Pedido registrado (sem CRM configurado)."
-                        with open(arq,'r') as f:
-                            sheet_id = f.read().strip()
-
-                        # Garante aba Tarefas
-                        meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
-                        abatitulos = [s["properties"]["title"] for s in meta["sheets"]]
-                        if "Tarefas" not in abatitulos:
-                            svc.spreadsheets().batchUpdate(
-                                spreadsheetId=sheet_id,
-                                body={"requests":[{"addSheet":{"properties":{"title":"Tarefas"}}}]}
-                            ).execute()
-
-                        # Registra pedido pendente de aprovação
-                        svc.spreadsheets().values().append(
-                            spreadsheetId=sheet_id,
-                            range="Tarefas!A1",
-                            valueInputOption="RAW",
-                            body={"values":[[
-                                datetime.now().strftime("%d/%m/%Y %H:%M"),
-                                "Pedido de agendamento",
-                                "Aguardando aprovação do advogado",
-                                numero,
-                                "Origem: cliente",
-                                "Pendente"
-                            ]]}
-                        ).execute()
-
-                        return "✅ Pedido de agendamento registrado no CRM para análise do advogado."
-                    except Exception:
-                        return "✅ Pedido registrado."
-
-                resposta_texto = _propose(numero, preview, _exec_solicitacao_agendamento)
-                fluxo_detectado = "agendar_consulta_cliente"
-
-    
             elif intent == "enviar_documento_cliente":
                 # 1) Se usuário respondeu "confirmar/cancelar", trata
                 conf = _check_confirm(numero, mensagem.lower())
                 if conf:
                     fluxo_detectado = "enviar_documento_cliente"
-                    # Humanização do retorno (quando houver resposta direta sem preview, ex.: confirmar)
                     if conf:
-                        resposta_texto = _humanize_post(_humanize_during(resposta_texto), "enviar_documento_cliente")
-                    resposta_texto = conf
+                        resposta_texto = _humanize_post(_humanize_during(conf), "enviar_documento_cliente")
+                    else:
+                        resposta_texto = conf
                 else:
-                    preview = (_llm_reply("enviar_documento_cliente", mensagem)
-                            or "Posso **salvar seu documento** no Drive e **registrar no CRM** (pasta do cliente). Confirmar?")
+                    # Preview direto (auto-exec conforme policy)
+                    preview = "Vou **salvar seu documento** no Drive e **registrar no CRM** (pasta do cliente)."
 
                     def _exec_upload():
                         if not oauth_ok:
                             ids["file_id"] = "mock_file_id"
+                            # Conectar conversão de lead/cliente (opcional)
+                            try:
+                                nome_cli = data.get("nome_cliente") or "Cliente"
+                                processar_conversao_cliente(
+                                    numero, nome_cli,
+                                    documentos={"identidade": True, "comprovante_endereco": True},
+                                    relato_caso=(data.get("relato_caso") or ""),
+                                    email_advogado=None
+                                )
+                            except Exception:
+                                pass
                             return "✅ Documento salvo (simulado)."
                         conteudo = (mensagem or "Documento enviado pelo cliente").encode("utf-8")
                         file_id, file_link = upload_drive_bytes("documento_cliente.txt", conteudo, pasta_id=None, mime_type="text/plain")
@@ -1544,14 +1727,95 @@ def processar_atendimento():
                                         ).execute()
                             except Exception:
                                 pass
-                            return f"✅ **Documento** salvo no **Drive** e registrado no **CRM**."
+                            # Conectar conversão de lead/cliente (opcional)
+                            try:
+                                nome_cli = data.get("nome_cliente") or "Cliente"
+                                processar_conversao_cliente(
+                                    numero, nome_cli,
+                                    documentos={"identidade": True, "comprovante_endereco": True},
+                                    relato_caso=(data.get("relato_caso") or ""),
+                                    email_advogado=None
+                                )
+                            except Exception:
+                                pass
+                            return "✅ **Documento** salvo no **Drive** e registrado no **CRM**."
                         return "⚠️ Não consegui salvar seu documento agora. Podemos tentar novamente?"
-                    resposta_texto = _propose(numero, preview, _exec_upload)
+
+                    resposta_texto = _auto_or_propose("enviar_documento_cliente", numero, preview, _exec_upload)
                     fluxo_detectado = "enviar_documento_cliente"
-    
+
+            elif intent == "atualizar_cadastro_cliente":
+                # parse mínimo por regex + NLU (telefone/email/endereço vindos do text_processing)
+                try:
+                    from app.routes.text_processing import analisar_texto
+                except Exception:
+                    def analisar_texto(_): return {"telefones": [], "emails": []}
+                infos = analisar_texto(mensagem)
+                novo_tel = (infos.get("telefones") or [""])[0]
+                novo_email = (infos.get("emails") or [""])[0]
+
+                preview = "Vou atualizar seu cadastro no CRM."
+                def _exec_update():
+                    svc = get_google_sheets_service()
+                    if not svc: return "✅ Cadastro atualizado (simulado)."
+                    nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                    arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+                    if not os.path.exists(arq): return "✅ Cadastro atualizado (sem CRM configurado)."
+                    with open(arq,'r') as f: sheet_id = f.read().strip()
+                    try:
+                        svc.spreadsheets().values().append(
+                            spreadsheetId=sheet_id, range="Clientes!A1", valueInputOption="RAW",
+                            body={"values":[[datetime.now().strftime("%d/%m/%Y %H:%M"), numero, novo_tel, novo_email, "Atualização"]]}
+                        ).execute()
+                        return "✅ Cadastro atualizado no CRM."
+                    except Exception:
+                        return "✅ Cadastro atualizado."
+                resposta_texto = _auto_or_propose("atualizar_cadastro_cliente", numero, preview, _exec_update)
+                fluxo_detectado = "atualizar_cadastro_cliente"
+
+            elif intent == "followup_cliente":
+                preview = "Vou enviar um lembrete amigável ao cliente."
+                def _exec_follow():
+                    svc = get_google_sheets_service()
+                    if not svc:
+                        return "✅ Lembrete enviado (simulado)."
+                    nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
+                    arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
+                    if not os.path.exists(arq):
+                        return "✅ Lembrete enviado (sem CRM configurado)."
+                    with open(arq,'r') as f:
+                        sheet_id = f.read().strip()
+                    try:
+                        # Garante aba Tarefas
+                        meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+                        abatitulos = [s["properties"]["title"] for s in meta["sheets"]]
+                        if "Tarefas" not in abatitulos:
+                            svc.spreadsheets().batchUpdate(
+                                spreadsheetId=sheet_id,
+                                body={"requests":[{"addSheet":{"properties":{"title":"Tarefas"}}}]}
+                            ).execute()
+                        # Append tarefa "Follow-up automático"
+                        svc.spreadsheets().values().append(
+                            spreadsheetId=sheet_id, range="Tarefas!A1", valueInputOption="RAW",
+                            body={"values":[[
+                                datetime.now().strftime("%d/%m/%Y %H:%M"),
+                                "Follow-up automático",
+                                "",
+                                numero,
+                                "Origem: sistema",
+                                "Enviado"
+                            ]]}
+                        ).execute()
+                        return "✅ Lembrete enviado."
+                    except Exception:
+                        return "✅ Lembrete enviado."
+                resposta_texto = _auto_or_propose("followup_cliente", numero, preview, _exec_follow)
+                fluxo_detectado = "followup_cliente"
+
             else:
                 fluxo_detectado = "fluxo_nao_detectado"
                 resposta_texto = "Posso te ajudar com **seu caso**, **agendar** um horário ou **salvar seu documento**."
+
             # 🔁 FALLBACK: se ainda não detectou nada por regra, classificar via LLM (rótulos fechados)
             if fluxo_detectado == "fluxo_nao_detectado":
                 try:
@@ -1570,12 +1834,12 @@ def processar_atendimento():
                             resposta_texto = "🔎 Me informe o **número do processo** para consultar o andamento."
                 except Exception:
                     pass
-    
+
         else:
             fluxo_detectado = 'tipo_usuario_desconhecido'
             resposta_texto = 'Informe tipo_usuario = cliente ou advogado.'
-    
-        # Armazenar no contexto da requisição para after_request (para demais caminhos)
+
+        # Armazenar no contexto da requisição e responder
         g.fluxo_detectado = fluxo_detectado
     
         payload = {
