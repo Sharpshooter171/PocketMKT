@@ -79,6 +79,22 @@ def _ensure_sheet(sheet_id: str, title="Casos Jurídicos – Escritório Geral")
         _DB["sheets"][sheet_id] = {"title": title, "tabs": {
             "Casos": [], "Clientes": [], "Tarefas": [], "Documentos": []
         }}
+    return _DB["sheets"][sheet_id]
+
+# --- Helpers de sheet em memória (adição) ---
+def ensure_sheet_id_file(sheet_id: str):
+    """Garante a existência da planilha em memória (stub)."""
+    _ensure_sheet(sheet_id)
+
+def buscar_ou_criar_planilha(nome_escritorio: str):
+    """
+    Stub da função usada pelo atendimento.py.
+    Garante a existência da planilha e retorna o ID usado nos testes.
+    """
+    sheet_id = "SHEET_TEST_1"
+    titulo = f"Casos Jurídicos – {nome_escritorio or 'Escritório Geral'}"
+    _ensure_sheet(sheet_id, title=titulo)
+    return sheet_id
 
 class _Values:
     def __init__(self, sid): self.sid = sid
@@ -162,6 +178,9 @@ google_stub.criar_evento_calendar = criar_evento_calendar
 google_stub.enviar_email_gmail = enviar_email_gmail
 google_stub.verificar_cliente_existente_google_api = verificar_cliente_existente_google_api
 google_stub.registrar_lead_google_api = registrar_lead_google_api
+# Export adicional requerido
+google_stub.buscar_ou_criar_planilha = buscar_ou_criar_planilha
+
 sys.modules["app.google_service"] = google_stub
 
 ###############################################################################
