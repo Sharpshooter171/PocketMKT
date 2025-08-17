@@ -221,11 +221,14 @@ prompt_config = {
 
 def montar_prompt_instruct(system_prompt, user_message):
     """
-    Monta o prompt final para o modelo, garantindo que o system prompt e a mensagem do usuário
-    sejam encapsulados corretamente dentro do wrapper de instrução.
+    Monta o prompt final para o modelo usando o wrapper central.
+    - Não duplica o wrapper se o conteúdo já vier embrulhado.
     """
-    wrapper = prompt_config["prompt_wrapper"]
-    # O prompt combina as instruções do sistema e a mensagem do usuário.
-    prompt_completo = f"{system_prompt}\n\nUsuário: {user_message}\nAtendente:"
-    # O wrapper [INST]...[/INST] deve envolver todo o conteúdo.
-    return wrapper.format(prompt_completo)
+    wrapper = prompt_config.get("prompt_wrapper", "{}")
+    # Conteúdo base (sem wrapper)
+    base = f"{(system_prompt or '').strip()}\n\nUsuário: {(user_message or '').strip()}\nAtendente:"
+    # Evita dupla aplicação se já vier com [INST] (proteção)
+    if base.lstrip().startswith("<s>[INST]") and base.rstrip().endswith("[/INST]"):
+        return base
+    # Aplica wrapper único
+    return wrapper.format(base)
