@@ -220,7 +220,6 @@ def _llm_reply(intent_key, user_message):
         }
         prompt_key = key_map.get(intent_key) or key_map["system"]
         system_prompt = prompt_config.get(prompt_key) or prompt_config.get("system_prompt", "")
-
     except Exception:
         return None
 
@@ -717,9 +716,12 @@ try:
     from app.prompt_config import prompt_config, montar_prompt_instruct
 except ImportError:
     prompt_config = {}
-    # Fallback function in case the import fails
-    def montar_prompt_instruct(system_prompt, user_message):
-        return f"<s>[INST] {system_prompt}\nUsuário: {user_message}\nAtendente: [/INST]"
+    # Fallback sem template proprietário; tenta importar em runtime, senão concatena simples
+    try:
+        from app.prompt_config import montar_prompt_instruct  # runtime import para evitar hardcode
+    except Exception:
+        def montar_prompt_instruct(system_prompt, user_message):
+            return f"{system_prompt}\nUsuário: {user_message}"
 
 try:
     from app.google_service import verificar_cliente_existente_google_api, registrar_lead_google_api

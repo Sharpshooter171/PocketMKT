@@ -6,6 +6,17 @@ import base64
 import importlib
 from datetime import datetime  # já importado acima também, mantemos
 
+# Limite de caracteres exibidos nas amostras do relatório.
+# 0 = sem truncar
+E2E_SNIPPET_LIMIT = int(os.getenv("E2E_SNIPPET_LIMIT", "0"))
+
+def _snippet(txt: str) -> str:
+    if not txt:
+        return ""
+    if not E2E_SNIPPET_LIMIT or len(txt) <= E2E_SNIPPET_LIMIT:
+        return txt
+    return txt[:E2E_SNIPPET_LIMIT] + "…"
+
 # Flags de ambiente para alternar integrações reais
 USE_REAL_GOOGLE = os.getenv("E2E_USE_REAL_GOOGLE", "0").strip().lower() in ("1", "true", "yes")
 USE_REAL_LLM = os.getenv("E2E_USE_REAL_LLM", "0").strip().lower() in ("1", "true", "yes")
@@ -429,7 +440,11 @@ def _write_reports():
     md.append("")
     md.append("## Amostras de Conversas (últimas 20)")
     for it in last_interactions:
-        md.append(f"- [{it['ts']}] ({it['tipo']}:{it['numero']}) “{it['msg']}” → fluxo={it.get('fluxo')} | resposta=\"{it.get('resposta','')[:160]}\"")
+        texto_original = it.get("msg", "")
+        resposta_original = it.get("resposta", "")
+        texto_fmt = _snippet(texto_original)
+        resposta_fmt = _snippet(resposta_original)
+        md.append(f"- [{it['ts']}] ({it['tipo']}:{it['numero']}) “{texto_fmt}” → fluxo={it.get('fluxo')} | resposta=\"{resposta_fmt}\"")
     md.append("")
     if stub_snapshot:
         md.append("## Snapshot do CRM/Drive (modo stub)")
@@ -466,7 +481,8 @@ def hit(msg, numero, tipo="cliente", extra=None, expect_status=200):
             "numero": numero,
             "msg": msg,
             "fluxo": j.get("fluxo"),
-            "resposta": (j.get("resposta") or "")[:500],
+            # não truncar aqui; truncamento é controlado por _snippet no relatório
+            "resposta": (j.get("resposta") or ""),
             "intent_source": j.get("intent_source")
         })
     except Exception:
