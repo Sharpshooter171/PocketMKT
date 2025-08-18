@@ -44,13 +44,8 @@ def start_painel_if_needed():
 from dotenv import load_dotenv
 load_dotenv()  # antes dos imports que usam as envs
 
-
 # Imports dos blueprints/serviços
-try:
-    from app.routes.atendimento import atendimento_bp  # caminho atual do blueprint
-except ImportError:
-    # fallback caso o usuário mova para app.atendimento no futuro
-    from app.atendimento import atendimento_bp  # type: ignore
+from app.routes.atendimento import atendimento_bp  # import explícito do blueprint
 
 try:
     from app.google_service import google_bp
@@ -87,7 +82,7 @@ def create_app():
     init_db()
 
     # Registro dos blueprints
-    app.register_blueprint(atendimento_bp)
+    app.register_blueprint(atendimento_bp)  # opcional: url_prefix="/api"
     if google_bp:
         app.register_blueprint(google_bp)
     if twilio_bp:
@@ -107,6 +102,11 @@ if __name__ == "__main__":
     app = create_app()
     debug_mode = os.getenv("FLASK_DEBUG", "true").lower() == "true"
     host = os.getenv("FLASK_RUN_HOST", "0.0.0.0")
+    port = int(os.getenv("FLASK_RUN_PORT", "5000"))
+    print(f"🔄 Inicializando servidor Flask em {host}:{port} (debug={debug_mode})...")
+    start_painel_if_needed()
+    app.run(host=host, port=port, debug=debug_mode)
+    print("🛑 Servidor Flask finalizado.")
     port = int(os.getenv("FLASK_RUN_PORT", "5000"))
     print(f"🔄 Inicializando servidor Flask em {host}:{port} (debug={debug_mode})...")
     start_painel_if_needed()
