@@ -11,46 +11,46 @@ app = create_app()
 
 if __name__ == "__main__":
     print("🚀 Iniciando main.py do PocketMKT...")
-    app.run(host="0.0.0.0", port=5000)
 
-def start_painel_if_needed():
-    host = "127.0.0.1"
-    port = int(os.getenv("PANEL_PORT", "8000"))
-    if _port_open(host, port):
-        print(f"[painel] já está rodando em {host}:{port}")
-        return
-    project_root = Path(__file__).resolve().parent
-    painel_script = project_root / "app" / "painel" / "painel.py"
-    if not painel_script.exists():
-        print(f"[painel] ERRO: {painel_script} não encontrado"); return
-    env = os.environ.copy()
-    # Backend padrão: 127.0.0.1:5000 (ajuste se seu backend usa outra porta)
-    env.setdefault("BACKEND_BASE_URL", f"http://127.0.0.1:{int(env.get('FLASK_PORT', '5000'))}")
-    log_dir = project_root / "logs"; log_dir.mkdir(exist_ok=True)
-    log_fp = open(log_dir / "painel.log", "a", buffering=1)
-    print(f"[painel] iniciando {painel_script} ...")
-    subprocess.Popen([sys.executable, str(painel_script)], cwd=str(project_root), env=env,
-                     stdout=log_fp, stderr=log_fp)
-    # espera até subir
-    for _ in range(40):
+    # --- Auto-start do painel (como no arquivo anterior), mas só no run direto ---
+    import os, socket, subprocess, sys, time
+    from pathlib import Path
+
+    def _port_open(host, port):
+        try:
+            with socket.socket() as s:
+                s.settimeout(0.5)
+                return s.connect_ex((host, port)) == 0
+        except Exception:
+            return False
+
+    def start_painel_if_needed():
+        host = "127.0.0.1"
+        port = int(os.getenv("PANEL_PORT", "8000"))
         if _port_open(host, port):
-            print(f"[painel] ON em http://{host}:{port}/painel")
-            break
-        time.sleep(0.25)
-# ==== FIM bloco painel ====
+            print(f"[painel] já está rodando em {host}:{port}")
+            return
+        project_root = Path(__file__).resolve().parent
+        painel_script = project_root / "app" / "painel" / "painel.py"
+        if not painel_script.exists():
+            print(f"[painel] ERRO: {painel_script} não encontrado"); return
+        env = os.environ.copy()
+        # Backend padrão: 127.0.0.1:5000 (ajuste se seu backend usa outra porta)
+        env.setdefault("BACKEND_BASE_URL", "http://127.0.0.1:5000")
+        log_dir = project_root / "logs"; log_dir.mkdir(exist_ok=True)
+        log_fp = open(log_dir / "painel.log", "a", buffering=1)
+        print(f"[painel] iniciando {painel_script} ...")
+        subprocess.Popen([sys.executable, str(painel_script)], cwd=str(project_root), env=env,
+                         stdout=log_fp, stderr=log_fp)
+        # espera até subir
+        for _ in range(40):
+            if _port_open(host, port):
+                print(f"[painel] ON em http://{host}:{port}/painel")
+                break
+            time.sleep(0.25)
 
-
-from dotenv import load_dotenv
-load_dotenv()  # antes dos imports que usam as envs
-
-# Imports dos blueprints/serviços
-from app.routes.atendimento import atendimento_bp  # import explícito do blueprint
-
-try:
-    from app.google_service import google_bp
-except ImportError:
-    google_bp = None  # blueprint opcional
-
+    start_painel_if_needed()
+    app.run(host="0.0.0.0", port=5000)
 try:
     from app.database_service import init_db
 except ImportError:
