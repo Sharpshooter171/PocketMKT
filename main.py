@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
     start_painel_if_needed()
     app.run(host="0.0.0.0", port=5000)
-        print("⚠️ init_db não disponível (import falhou)")
+    print("⚠️ init_db não disponível (import falhou)")
 
 # Importa integração Twilio (Webhook)
 try:
