@@ -171,6 +171,20 @@ _HUMANIZED_FOOTERS = {
     "agendar_consulta_cliente": "\n\n📌 Após a aprovação do advogado, confirmamos o horário e te enviamos o convite.",
     "enviar_documento_cliente": "\n\n📌 Assim que o documento entrar no CRM, o advogado consegue acessá-lo na pasta do seu caso."
 }
+
+# === Mensagens canônicas (determinísticas) para agenda ===
+MSG_AGENDA_PREVIEW  = "🗓️ Prévia de agendamento criada. Aguardando aprovação do advogado."
+MSG_AGENDA_APROVADO = "✅ Agendamento aprovado e evento criado no Calendar."
+MSG_AGENDA_RECUSADO = "✅ Pedido de agendamento recusado. Informe novos horários possíveis ao cliente."
+MSG_AGENDA_SUGERIR  = "✅ Solicitação registrada. Sugerir novos horários ao cliente."
+
+_CANONICAL_AGENDA_SET = {
+    MSG_AGENDA_PREVIEW, MSG_AGENDA_APROVADO, MSG_AGENDA_RECUSADO, MSG_AGENDA_SUGERIR
+}
+
+def _is_canonical_agenda_response(text: str) -> bool:
+    return (text or "").strip() in _CANONICAL_AGENDA_SET
+
 def _humanize_post(texto, fluxo):
     rodape = _HUMANIZED_FOOTERS.get(fluxo, "\n\nPosso ajudar com mais alguma coisa?")
     # Evita duplicar se a mensagem já contém um rodapé semelhante
@@ -1263,7 +1277,7 @@ def _auto_or_propose(intent_key, numero, preview, exec_cb, ttl=15):
     }
     return f"{preview}\n\nResponda *confirmar* para executar, ou *cancelar* para descartar."
 
-@atendimento_bp.route('/processar_atendimento', methods=['POST'])
+@app.route('/processar_atendimento', methods=['POST'])
 def processar_atendimento():
     """Endpoint principal unificado: detecta fluxos básicos de cliente e todos de advogado.
     Sempre retorna HTTP 200 com contrato mínimo (resposta, fluxo, numero, tipo_usuario, ids...)."""
@@ -1331,8 +1345,25 @@ def processar_atendimento():
             conf = _check_confirm(numero, (mensagem or '').lower())
             if conf:
                 fluxo_detectado = "aprovar_agendamento_advogado"
+                # Se a execução confirmou agenda, preserve mensagem canônica sem humanização/footer
+                if _is_canonical_agenda_response(conf):
+                    payload = {"resposta": conf, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "rule"}
+                    return jsonify(payload), 200
+                # ...fallback para mensagens não canônicas (mantém comportamento atual)...
                 resp = _humanize_post(_humanize_during(conf), fluxo_detectado) + _footer_advogado()
                 payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "rule"}
+                return jsonify(payload), 200
+
+            # Roteamento explícito: alterar/cancelar/remarcar/adiar agenda
+            if _is_alterar_cancelar_agenda(mensagem):
+                fluxo_detectado = "alterar_cancelar_agendamento"
+                # Heurística simples: contém 'cancel' -> recusar; caso contrário, sugerir
+                if re.search(r"\bcancel(ar|amento)\b", (mensagem or "").lower()):
+                    resposta_texto = MSG_AGENDA_RECUSADO
+                else:
+                    resposta_texto = MSG_AGENDA_SUGERIR
+                # Resposta canônica (sem humanização/footer)
+                payload = {"resposta": resposta_texto, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "rule"}
                 return jsonify(payload), 200
 
             # 0) NLU: o advogado está aprovando/recusando/sugerindo horário?
@@ -1346,17 +1377,15 @@ def processar_atendimento():
                     if os.path.exists(arq):
                         with open(arq,'r') as f: sheet_id = f.read().strip()
                     if not (svc and sheet_id):
-                        # Sem CRM: ainda assim responde humano
+                        # Sem CRM: ainda assim responde canônico
                         if decisao["acao"] == "recusar":
-                            resposta_texto = "✅ Pedido de agendamento **recusado**. Não registrarei evento."
                             fluxo_detectado = "aprovar_agendamento_advogado"
-                            resp = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
-                            payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                            payload = {"resposta": MSG_AGENDA_RECUSADO, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
                             return jsonify(payload), 200
 
                     row_index, label, inicio_iso_salvo, fim_iso_salvo = _buscar_pedido_agendamento_pendente(svc, sheet_id, numero)
                     if not row_index:
-                        # Nenhum pedido pendente para esse cliente
+                        # Nenhum pedido pendente para esse cliente (mantém mensagem atual)
                         resposta_texto = "Não encontrei pedido de agendamento pendente para este cliente. Posso registrar um novo pedido?"
                         fluxo_detectado = "aprovar_agendamento_advogado"
                         resp = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
@@ -1364,17 +1393,15 @@ def processar_atendimento():
                         return jsonify(payload), 200
 
                     acao = decisao["acao"]
-                    # Se o advogado recusou
+
+                    # Se o advogado recusou -> mensagem canônica
                     if acao == "recusar":
                         _atualizar_status_tarefa(svc, sheet_id, row_index, "Recusado")
-                        resposta_texto = "✅ Pedido de agendamento **recusado**. Informe ao cliente um novo período desejável ou peça para ele sugerir outros horários."
                         fluxo_detectado = "aprovar_agendamento_advogado"
-                        resp = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
-                        payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                        payload = {"resposta": MSG_AGENDA_RECUSADO, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
                         return jsonify(payload), 200
 
-                    # Se aprovou ou sugeriu novo horário
-                    # Preferência: horários enviados pela LLM; senão, usa os salvos; senão, pega 1º livre atual
+                    # Preparar horários (com defaults) para aprovar/sugerir
                     inicio_iso = decisao.get("inicio_iso") or inicio_iso_salvo
                     fim_iso    = decisao.get("fim_iso") or fim_iso_salvo
                     if not (inicio_iso and fim_iso):
@@ -1383,15 +1410,25 @@ def processar_atendimento():
                             inicio_iso = slots[0]["inicio_iso"]
                             fim_iso = slots[0]["fim_iso"]
 
-                    # Preview → confirmar → executar (mesmo padrão de segurança)
-                    human_preview = f"Vou **criar o evento** de consulta para o cliente {numero} no horário: *{label or 'definido'}*. Confirmar?"
+                    if acao == "aprovar":
+                        # Executa criação do evento; responde canônico
+                        _ = _exec_criar_evento_aprovado(numero, inicio_iso, fim_iso, label, data)
+                        fluxo_detectado = "aprovar_agendamento_advogado"
+                        payload = {"resposta": MSG_AGENDA_APROVADO, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                        return jsonify(payload), 200
+
+                    if acao == "sugerir":
+                        # Apenas registra orientação de sugerir novos horários (sem prévia/execução)
+                        fluxo_detectado = "aprovar_agendamento_advogado"
+                        payload = {"resposta": MSG_AGENDA_SUGERIR, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                        return jsonify(payload), 200
+
+                    # Fallback: criar PRÉVIA (pendência) e responder canônico de prévia
                     def _exec_adv_criar():
                         return _exec_criar_evento_aprovado(numero, inicio_iso, fim_iso, label, data)
-
-                    resposta_texto = _propose(numero, human_preview, _exec_adv_criar)
+                    _ = _propose(numero, MSG_AGENDA_PREVIEW, _exec_adv_criar)  # mantém pendência, ignora texto retornado
                     fluxo_detectado = "aprovar_agendamento_advogado"
-                    resp = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
-                    payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                    payload = {"resposta": MSG_AGENDA_PREVIEW, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
                     return jsonify(payload), 200
                 except Exception:
                     # se algo falhar, cai pro fluxo normal do advogado
@@ -1555,7 +1592,11 @@ def processar_atendimento():
 
             # Humanização e footer para advogado (inclusive quando preview foi usado)
             if resposta_texto:
-                resposta_texto = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
+                # Não anexar rodapé às mensagens canônicas de agenda
+                if _is_canonical_agenda_response(resposta_texto):
+                    resposta_texto = resposta_texto
+                else:
+                    resposta_texto = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
         # ---------------- Fluxos CLIENTE (Google + detecção híbrida) ------------------
         elif tipo_usuario == 'cliente':
             # ✅ Modo simulado quando faltar OAuth (sem redirect)

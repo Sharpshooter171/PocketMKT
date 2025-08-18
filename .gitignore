@@ -58,3 +58,6 @@ push origin main.example
 .env
 .env.*
 push origin main.example
+.env
+*.env
+.env.*

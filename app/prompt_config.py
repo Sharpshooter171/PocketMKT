@@ -219,13 +219,13 @@ prompt_config = {
     )
 }
 
-def montar_prompt_instruct(system_prompt: str, user_message: str) -> str:
+def montar_prompt_instruct(system: str, user: str) -> str:
     """
     Mistral Instruct: coloca o system dentro de <<SYS>>...<</SYS>> no PRIMEIRO [INST].
-    Não inclua 'Usuário:' ou 'Atendente:' no prompt final (isso induz eco).
+    Não inclua rótulos como 'Usuário:' ou 'Atendente:' no prompt final.
     """
-    system = (system_prompt or "").strip()
-    user = (user_message or "").strip()
+    system = (system or "").strip()
+    user = (user or "").strip()
     sys_block = f"<<SYS>>\n{system}\n<</SYS>>\n\n" if system else ""
-    inner = f"{sys_block}{user}"
-    return prompt_config["prompt_wrapper"].format(inner)
+    wrapper = prompt_config.get("prompt_wrapper", "<s>[INST] {} [/INST]")
+    return wrapper.format(f"{sys_block}{user}")
