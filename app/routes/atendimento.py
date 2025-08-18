@@ -1,12 +1,9 @@
 # Bootstrapping de path para execução local/AWS (antes de qualquer import de 'app')
 import os, sys
-try:
-    import app  # testa se o pacote já está acessível
-except Exception:
-    _FILE_DIR = os.path.dirname(os.path.abspath(__file__))
-    _PROJECT_ROOT = os.path.abspath(os.path.join(_FILE_DIR, "..", ".."))  # .../PocketMKT
-    if _PROJECT_ROOT not in sys.path:
-        sys.path.insert(0, _PROJECT_ROOT)
+_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_FILE_DIR, "..", ".."))  # .../PocketMKT
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
 
 from app.routes.text_processing import (
     fluxo_onboarding_advogado,
@@ -644,7 +641,7 @@ import threading
 from flask import Blueprint, request, jsonify, Response
 
 # Blueprint deve ser definido antes de ser usado
-atendimento_bp = Blueprint('atendimento', __name__)
+atendimento_bp = Blueprint("atendimento_bp", __name__)
 prompt_config_lock = threading.Lock()
 
 
@@ -1277,7 +1274,7 @@ def _auto_or_propose(intent_key, numero, preview, exec_cb, ttl=15):
     }
     return f"{preview}\n\nResponda *confirmar* para executar, ou *cancelar* para descartar."
 
-@app.route('/processar_atendimento', methods=['POST'])
+@atendimento_bp.route('/processar_atendimento', methods=['POST'])
 def processar_atendimento():
     """Endpoint principal unificado: detecta fluxos básicos de cliente e todos de advogado.
     Sempre retorna HTTP 200 com contrato mínimo (resposta, fluxo, numero, tipo_usuario, ids...)."""
@@ -1910,6 +1907,9 @@ def processar_atendimento():
             "erro": str(e)
         }), 200
 
+# Execução direta (smoke test) – permite rodar local/AWS sem quebrar imports
+if __name__ == "__main__":
+    print("atendimento.py carregado. Suba o servidor Flask via 'flask run' ou o app principal.")
 # Execução direta (smoke test) – permite rodar local/AWS sem quebrar imports
 if __name__ == "__main__":
     print("atendimento.py carregado. Suba o servidor Flask via 'flask run' ou o app principal.")
