@@ -160,7 +160,8 @@
     }
     async function fetchStatus(){
       try{
-        const r = await fetch(`${BACKEND_BASE_URL}/status`, { credentials: 'omit' });
+        // Usar o proxy local do painel para evitar CORS
+        const r = await fetch(`/status`, { credentials: 'omit' });
         const j = await r.json().catch(()=>({}));
         document.getElementById('st-backend').textContent = r.ok ? 'ONLINE' : `HTTP ${r.status}`;
         const googleOk = j.google_oauth === true || (j.backend_status && j.backend_status.google_oauth === true);

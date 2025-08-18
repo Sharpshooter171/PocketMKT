@@ -13,86 +13,81 @@ except Exception:
 
 # ===== Instrução longa para o painel (será injetada no HTML) =====
 INSTRUCAO_TESTE_ASSISTENTE = """
-📚 GUIA DE TESTES DO ASSISTENTE MODULAR
+📚 GUIA DE TESTES DO ASSISTENTE (MVP)
 
-Este guia explica o que cada função faz, como testar e também o que o assistente modular realiza nos bastidores para automatizar o seu trabalho. 
-O objetivo é que você, como advogado(a), valide todos os fluxos e nos envie o arquivo JSON do debugger ao final para que possamos corrigir e otimizar o sistema.
+Este guia resume os principais fluxos implementados no backend (atendimento.py) e como validar cada um antes do MVP com os advogados.
 
-⚙️ O que o Assistente Modular faz “por trás”:
-• 📊 Cria e atualiza planilhas no Google Sheets para funcionar como CRM do escritório.
-• 📁 Cria pastas e salva documentos no Google Drive, organizando por nome do cliente.
-• 📧 Envia e-mails pelo Gmail para confirmações e envio de links.
-• 📅 Cria eventos no Google Calendar e envia convites.
-• 💬 Envia mensagens automáticas via WhatsApp (versão final).
-• 🗂 Atualiza listas de clientes aguardando retorno ou com documentos pendentes.
-• 📢 Envia notificações de prazo ou audiência.
+Conecte seu Google (Sheets/Drive/Calendar/Gmail) pelo botão “Conectar Google”. Depois, use o WhatsApp (Twilio Sandbox) para conversar com o assistente. O painel mostra status e logs no Debug.
 
-⚖️ Fluxos do Advogado (`tipo_usuario = advogado`):
-1. fluxo_onboarding_advogado → Coleta dados para configurar CRM: nome, OAB, especialidade, escritório e como organiza seus clientes (por área, urgência, data etc.). 
-   Teste: "Meu nome é João Silva, OAB 12345, especialista em direito trabalhista, organizo meus clientes por área e urgência."
-2. fluxo_aprovacao_peticao → Registra petição aprovada. 
-   Teste: "A petição está aprovada, pode protocolar."
-3. fluxo_alerta_prazo → Gera lembrete de prazo/audiência.
-   Teste: "Prazo do recurso vence amanhã."
-4. fluxo_honorarios → Registra valores de honorários.
-   Teste: "Os honorários são de R$ 5.000,00."
-5. fluxo_documento_juridico → Envia ou armazena modelo de documento.
-   Teste: "Preciso de um modelo de contrato de prestação de serviços."
-6. fluxo_envio_documento_cliente → Salva documento para cliente.
-   Teste: "Enviar cópia da petição ao cliente."
-7. fluxo_consulta_andamento → Consulta andamento processual.
-   Teste: "Verificar andamento do processo 0000000-00.0000.0.00.0000."
-8. fluxo_pagamento_fora_padrao → Registra pagamento fora do combinado.
-   Teste: "O cliente pagou um valor menor que o acordado."
-9. fluxo_indicacao → Registra cliente indicado.
-   Teste: "O João me indicou a Maria como cliente."
-10. fluxo_documento_pendente → Marca documento pendente.
-    Teste: "Falta o comprovante de endereço."
-11. fluxo_revisao_documento → Solicita revisão.
-    Teste: "Preciso que revise essa contestação."
-12. fluxo_status_negociacao → Registra status de negociação.
-    Teste: "Negociação está em fase final."
-13. fluxo_decisao_permuta → Atualiza decisão sobre permuta.
-    Teste: "Cliente aceitou a permuta."
-14. fluxo_sumiço_cliente → Marca cliente inativo.
-    Teste: "Cliente sumiu desde semana passada."
-15. fluxo_update_clientes_aguardando → Atualiza clientes aguardando.
-    Teste: "Atualizar lista de clientes aguardando retorno."
-16. fluxo_update_documento_pendente → Atualiza status de documentos.
-    Teste: "Atualizar situação do RG do cliente."
-17. fluxo_nao_atendimento_area → Marca caso como não atendido por área.
-    Teste: "Não atuo em direito criminal."
-18. fluxo_status_multiplos_processos → Registra status de múltiplos processos.
-    Teste: "Verificar processos 123 e 456."
-19. fluxo_notificacao_cliente → Envia notificação ao cliente.
-    Teste: "Avisar cliente que audiência foi marcada."
-20. fluxo_alterar_cancelar_agendamento → Atualiza/cancela compromisso.
-    Teste: "Cancelar reunião de amanhã."
-21. fluxo_resumo_estatisticas → Gera relatório.
-    Teste: "Quantos casos foram fechados este mês?"
-22. fluxo_lembrete_audiencia → Cria lembrete de audiência.
-    Teste: "Me lembrar da audiência dia 20."
-23. fluxo_enviar_resumo_caso → Envia resumo de caso.
-    Teste: "Me envie o resumo do caso do cliente João."
+O que o assistente faz por trás (quando Google está conectado):
+• CRM (Google Sheets): cria/garante planilhas por escritório e registra Casos, Tarefas, Clientes e Documentos.
+• Drive: cria pastas por cliente (ex.: “Jorge Caldas”) e salva documentos na pasta correta; registra na aba Documentos do CRM.
+• Calendar: cria eventos de consulta após aprovação do advogado.
+• Gmail: envia emails (quando implementado em certos fluxos).
+• Twilio (Sandbox): recebe mensagens do WhatsApp; webhook do backend processa o fluxo.
 
-👤 Fluxos do Cliente (`tipo_usuario = cliente`):
-1. relato_caso → Registra relato e salva no CRM.
-   Cliente: "Fui demitido sem justa causa e quero meus direitos."
-2. consulta_andamento_cliente → Solicita dados para consulta processual.
-   Cliente: "Quero saber o andamento do meu processo."
-3. agendar_consulta_cliente → Cria evento no Calendar.
-   Cliente: "Quero agendar reunião amanhã às 15h."
-4. enviar_documento_cliente → Salva documento no Drive e CRM.
-   Cliente: Envia arquivo ou foto.
-5. fluxo_nao_detectado → Resposta padrão.
-   Cliente: Mensagem fora dos fluxos acima.
+FLUXOS DO CLIENTE (tipo_usuario=cliente)
+1) Saudação inicial
+   - Ex.: “Olá, tudo bem?”
+   - Esperado: resposta cordial e convite à triagem (“nome completo” e motivo).
 
-🛠 Como Testar:
-1. No painel, envie mensagens simulando cada fluxo, alternando tipo_usuario entre advogado e cliente.
-2. Observe a resposta e, quando aplicável, verifique se houve ação por trás (planilha criada, documento salvo, evento gerado).
-3. Teste todos os fluxos ao menos uma vez.
-4. Baixe o arquivo JSON do debugger no final.
-5. Envie para nossa equipe para análise e depuração.
+2) Relato de caso (registra no CRM)
+   - Ex.: “Fui demitido sem justa causa e preciso entender meus direitos.”
+   - Esperado: registra o relato na planilha do escritório, aba principal (com data, nome, telefone, área, urgência, resumo).
+
+3) Consulta de andamento do processo
+   - Com número: “Quero o andamento do processo 0000000-00.0000.0.00.0000”
+     • Tenta encontrar no CRM e retorna o status.
+   - Sem número: “Quero saber o andamento do meu processo”
+     • Abre automaticamente uma tarefa no CRM para o advogado retornar.
+
+4) Enviar documento (Drive + CRM)
+   - Ex.: “Segue anexo meu RG e comprovante de endereço.”
+   - Esperado: cria/usa a pasta do cliente no Drive e salva o documento; registra na aba Documentos da planilha.
+   - Observação: o backend também aceita upload binário via campo arquivo_base64/media_url no JSON (para testes automatizados/E2E).
+
+5) Atualizar cadastro (Clientes)
+   - Ex.: “Troquei de telefone: (11) 99999-1234 e meu e-mail é teste@exemplo.com”
+   - Esperado: insere/atualiza linha na aba Clientes (telefone/email e marcação “Atualização”).
+
+6) Follow-up automático (quando disponível)
+   - Ex.: “Poderia me lembrar amanhã?”
+   - Esperado: registra uma tarefa “Follow-up automático” no CRM.
+
+FLUXOS DO ADVOGADO (tipo_usuario=advogado)
+A) Aprovar/Recusar/Sugerir horário de agendamento
+   - Ex.: “Pode aprovar o pedido do cliente C5”
+     • Esperado: o assistente prepara preview e, após “confirmar”, cria evento no Calendar e marca a tarefa como “Aprovado”.
+   - Ex.: “Sem agenda essa semana, melhor recusar”
+     • Esperado: marca como “Recusado”.
+   - Ex.: “Prefiro amanhã às 10h”
+     • Esperado: sugere horário; ao confirmar, cria evento.
+
+B) Onboarding e preparação de CRM
+   - Ex.: “Quero configurar meu CRM (onboarding)”
+     • Esperado: prepara/garante planilha CRM com abas (Clientes, Casos, Tarefas, Financeiro, Documentos, Parceiros).
+
+C) Lembretes de prazos/audiências (Tarefas)
+   - Ex.: “Preciso registrar um lembrete de prazo para amanhã às 14h”
+     • Esperado: cria tarefa no CRM (“Lembrete de prazo/audiência”).
+
+D) Documento/Modelo jurídico
+   - Ex.: “Preciso de um modelo de contrato de prestação de serviços”
+     • Esperado: cria arquivo no Drive e registra na aba Documentos (quando aplicável).
+
+E) Outros fluxos suportados
+   - Honorários, revisão de documento, documento pendente, sumiço de cliente, notificação ao cliente, alterar/cancelar agendamento, resumo/estatísticas etc. (respostas polidas; quando aplicável, registram Tarefas/Documentos).
+
+Como testar
+1) Conecte o Google e valide o status no painel (Debug → Atualizar).
+2) Envie mensagens pelo WhatsApp (Twilio Sandbox) simulando os exemplos acima.
+3) Verifique efeitos no CRM (Sheets), arquivos no Drive (pasta do cliente) e eventos no Calendar.
+4) Exporte o JSON de debug pelo painel ao final e envie para a equipe.
+
+Observações
+• O assistente evita aconselhamento jurídico. Ele organiza, agenda e encaminha.
+• Upload binário real pode ser feito via arquivo_base64/media_url (testes automáticos/integração).
+• Se algo não funcionar, verifique as permissões do Google e o status do backend no painel.
 """
 
 app = Flask(__name__)

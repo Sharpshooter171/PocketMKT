@@ -14,13 +14,32 @@ import os
 import requests
 from typing import Any, Dict, Optional
 import json
+import re  # novo
 
-# Carrega host/porta/rota
+# Helper: limpa eco do template Mistral Instruct na saída
+def _clean_mistral_echo(txt: str) -> str:
+    s = (txt or "").lstrip()
+    # remove o que vier antes de [/INST] se ecoar
+    if s.startswith("<s>[INST]") or s.startswith("[INST]"):
+        end = s.find("[/INST]")
+        if end != -1:
+            s = s[end+len("[/INST]"):].lstrip()
+    # corta em </s> se vier lixo depois
+    eos = s.find("</s>")
+    if eos != -1:
+        s = s[:eos]
+    # remove prefixos de papel que às vezes vazam
+    for pref in ("Usuário:", "Usuario:", "Atendente:", "Assistente:"):
+        if s.startswith(pref):
+            s = s[len(pref):].lstrip()
+    return s.strip()
+
+# Se LLM_BASE_URL estiver definido, ele prevalece
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://172.31.18.20:8000").rstrip("/")
+# Mantém compat com funções antigas (health/infer_llm) que usam BASE/ROUTE
 HOST = os.getenv("LLM_HOST", "172.31.18.20")   # PRIVADO (produção)
 PORT = os.getenv("LLM_PORT", "8000")
 ROUTE = os.getenv("LLM_ROUTE", "/infer")
-
-# Se LLM_BASE_URL estiver definido, ele prevalece sobre HOST/PORT
 BASE = os.getenv("LLM_BASE_URL", f"http://{HOST}:{PORT}")
 OLLAMA_API_URL = f"{BASE}{ROUTE}"
 
@@ -120,22 +139,43 @@ def _extract_text(resp: Dict[str, Any]) -> str:
     # último recurso: stringificar
     return json.dumps(resp, ensure_ascii=False)
 
-def get_llama_response(prompt: str, system: str = "", max_tokens: int = 256, temperature: float = 0.2, extra: Optional[Dict[str, Any]] = None) -> str:
-    """Envia prompt à LLM e retorna texto limpo."""
+def get_llama_response(
+    prompt: str,
+    system: str = "",
+    max_tokens: int = 512,
+    temperature: float = 0.2,
+    extra: Optional[Dict[str, Any]] = None
+) -> str:
+    """
+    Chama a GPU em /infer. Envie 'prompt' já montado por montar_prompt_instruct().
+    Aumenta max_tokens por padrão (512). Limpa eco do template [INST].
+    Ignora silenciosamente parâmetros não usados (temperature/extra) para compatibilidade.
+    """
+    url = f"{LLM_BASE_URL}/infer"
+    payload: Dict[str, Any] = {
+        "prompt": prompt,
+        "max_new_tokens": int(max_tokens),
+        "system": system or ""
+    }
+    # Permite providers que aceitam temperature/extra sem quebrar
+    if temperature is not None:
+        payload["temperature"] = float(temperature)
+    if extra and isinstance(extra, dict):
+        payload.update(extra)
     try:
-        resp = infer_llm(
-            prompt=prompt,
-            system=system or "",
-            max_tokens=max_tokens,
-            temperature=temperature,
-            extra=extra,
-            # mantém coerência: max_new_tokens espelhado
-            max_new_tokens=max_tokens,
-        )
-        txt = _extract_text(resp)
-        return _strip_code_fences(txt).strip()
+        r = requests.post(url, json=payload, timeout=60)
+        r.raise_for_status()
+        if r.headers.get("content-type","").lower().startswith("application/json"):
+            data = r.json()
+            txt = data.get("text") or data.get("response") or data.get("generated_text") or ""
+        else:
+            txt = r.text or ""
+        cleaned = _clean_mistral_echo(txt)
+        # fallback mínimo ao remover cercas se houver
+        cleaned = _strip_code_fences(cleaned)
+        return cleaned.strip()
     except Exception as e:
-        return f""
+        return f"(Falha ao consultar LLM: {e})"
 
 def classify_intent_llm(texto: str) -> str:
     """

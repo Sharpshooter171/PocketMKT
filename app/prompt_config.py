@@ -219,16 +219,13 @@ prompt_config = {
     )
 }
 
-def montar_prompt_instruct(system_prompt, user_message):
+def montar_prompt_instruct(system_prompt: str, user_message: str) -> str:
     """
-    Monta o prompt final para o modelo usando o wrapper central.
-    - Não duplica o wrapper se o conteúdo já vier embrulhado.
+    Mistral Instruct: coloca o system dentro de <<SYS>>...<</SYS>> no PRIMEIRO [INST].
+    Não inclua 'Usuário:' ou 'Atendente:' no prompt final (isso induz eco).
     """
-    wrapper = prompt_config.get("prompt_wrapper", "{}")
-    # Conteúdo base (sem wrapper)
-    base = f"{(system_prompt or '').strip()}\n\nUsuário: {(user_message or '').strip()}\nAtendente:"
-    # Evita dupla aplicação se já vier com [INST] (proteção)
-    if base.lstrip().startswith("<s>[INST]") and base.rstrip().endswith("[/INST]"):
-        return base
-    # Aplica wrapper único
-    return wrapper.format(base)
+    system = (system_prompt or "").strip()
+    user = (user_message or "").strip()
+    sys_block = f"<<SYS>>\n{system}\n<</SYS>>\n\n" if system else ""
+    inner = f"{sys_block}{user}"
+    return prompt_config["prompt_wrapper"].format(inner)
