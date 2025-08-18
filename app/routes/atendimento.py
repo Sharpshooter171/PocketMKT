@@ -410,9 +410,6 @@ logging.basicConfig(level=logging.INFO)
 # --- Fallback for MessagingResponse if twilio is missing ---
 try:
     from twilio.twiml.messaging_response import MessagingResponse
-    from unidecode import unidecode
-    import os
-
 except ImportError:
     class MessagingResponse:
         def __init__(self):
@@ -1872,6 +1869,9 @@ def processar_atendimento():
             "erro": str(e)
         }), 200
 
+# Execução direta (smoke test) – permite rodar local/AWS sem quebrar imports
+if __name__ == "__main__":
+    print("atendimento.py carregado. Suba o servidor Flask via 'flask run' ou o app principal.")
 # Execução direta (smoke test) – permite rodar local/AWS sem quebrar imports
 if __name__ == "__main__":
     print("atendimento.py carregado. Suba o servidor Flask via 'flask run' ou o app principal.")
