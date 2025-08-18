@@ -1,9 +1,15 @@
 from flask import Flask
 from app.routes.atendimento import atendimento_bp
+from app.google_service import google_bp  # registra /authorize e /oauth2callback
 
 def create_app():
     app = Flask(__name__)
-    app.register_blueprint(atendimento_bp)   # sem prefixo => /processar_atendimento
+    app.secret_key = "troque-por-uma-chave-secreta"  # necessário para session do OAuth
+
+    # Blueprints (sem prefixos)
+    app.register_blueprint(atendimento_bp)  # /processar_atendimento
+    app.register_blueprint(google_bp)       # /authorize, /oauth2callback
+
     return app
 
 # ✅ app disponível no escopo do módulo (importável por gunicorn/testes/snippets)
@@ -12,7 +18,7 @@ app = create_app()
 if __name__ == "__main__":
     print("🚀 Iniciando main.py do PocketMKT...")
 
-    # --- Auto-start do painel (como no arquivo anterior), mas só no run direto ---
+    # Auto-start do painel, apenas em execução direta
     import os, socket, subprocess, sys, time
     from pathlib import Path
 
@@ -35,14 +41,12 @@ if __name__ == "__main__":
         if not painel_script.exists():
             print(f"[painel] ERRO: {painel_script} não encontrado"); return
         env = os.environ.copy()
-        # Backend padrão: 127.0.0.1:5000 (ajuste se seu backend usa outra porta)
         env.setdefault("BACKEND_BASE_URL", "http://127.0.0.1:5000")
         log_dir = project_root / "logs"; log_dir.mkdir(exist_ok=True)
         log_fp = open(log_dir / "painel.log", "a", buffering=1)
         print(f"[painel] iniciando {painel_script} ...")
         subprocess.Popen([sys.executable, str(painel_script)], cwd=str(project_root), env=env,
                          stdout=log_fp, stderr=log_fp)
-        # espera até subir
         for _ in range(40):
             if _port_open(host, port):
                 print(f"[painel] ON em http://{host}:{port}/painel")
@@ -51,10 +55,6 @@ if __name__ == "__main__":
 
     start_painel_if_needed()
     app.run(host="0.0.0.0", port=5000)
-try:
-    from app.database_service import init_db
-except ImportError:
-    def init_db():
         print("⚠️ init_db não disponível (import falhou)")
 
 # Importa integração Twilio (Webhook)
