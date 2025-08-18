@@ -1,18 +1,17 @@
 from flask import Flask
-from flask_cors import CORS
-import os
+from app.routes.atendimento import atendimento_bp
 
-# ==== Auto-start do painel (app/painel/painel.py) ====
-import subprocess, sys, time, socket, os
-from pathlib import Path
+def create_app():
+    app = Flask(__name__)
+    app.register_blueprint(atendimento_bp)   # sem prefixo => /processar_atendimento
+    return app
 
-def _port_open(host, port):
-    try:
-        with socket.socket() as s:
-            s.settimeout(0.5)
-            return s.connect_ex((host, port)) == 0
-    except Exception:
-        return False
+# ✅ app disponível no escopo do módulo (importável por gunicorn/testes/snippets)
+app = create_app()
+
+if __name__ == "__main__":
+    print("🚀 Iniciando main.py do PocketMKT...")
+    app.run(host="0.0.0.0", port=5000)
 
 def start_painel_if_needed():
     host = "127.0.0.1"
