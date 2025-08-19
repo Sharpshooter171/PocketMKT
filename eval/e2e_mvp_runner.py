@@ -2,6 +2,7 @@
 import os, sys, json, types, re
 from datetime import datetime, timedelta
 from flask import Flask
+import requests
 
 ###############################################################################
 # 0) Preparação de ambiente (PYTHONPATH)
@@ -176,7 +177,7 @@ client = app.test_client()
 def hit(msg, numero, tipo="cliente", extra=None, expect_status=200):
     payload = {"mensagem": msg, "numero": numero, "tipo_usuario": tipo}
     if extra: payload.update(extra)
-    r = client.post("/processar_atendimento", json=payload)
+    r = request.post("/processar_atendimento", json=payload)
     assert r.status_code == expect_status, f"HTTP {r.status_code} != {expect_status} for {msg}"
     print(f"\n→ ({tipo}:{numero}) {msg}\n← {r.json}")
     return r.json
@@ -194,7 +195,7 @@ ensure_sheet_id_file(sheet_id="SHEET_TEST_1")
 # 3) CENÁRIOS
 ###############################################################################
 def scenario_0_healthcheck():
-    r = client.post("/processar_atendimento", json={"healthcheck":True,"tipo_usuario":"cliente","numero":"X"})
+    r = request.post("/processar_atendimento", json={"healthcheck":True,"tipo_usuario":"cliente","numero":"X"})
     assert r.status_code == 200
 
 def scenario_1_saudacao():

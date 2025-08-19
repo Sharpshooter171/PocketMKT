@@ -19,29 +19,33 @@ import re  # novo
 # Helper: limpa eco do template Mistral Instruct na saída
 def _clean_mistral_echo(txt: str) -> str:
     s = (txt or "").lstrip()
-    # remove o que vier antes de [/INST] se ecoar
+    # removes everything before [/INST] if it echoes
     if s.startswith("<s>[INST]") or s.startswith("[INST]"):
         end = s.find("[/INST]")
         if end != -1:
             s = s[end+len("[/INST]"):].lstrip()
-    # corta em </s> se vier lixo depois
+    # cuts at </s> if there's garbage after
     eos = s.find("</s>")
     if eos != -1:
         s = s[:eos]
-    # remove prefixos de papel que às vezes vazam
+    # removes role prefix that sometimes leaks
     for pref in ("Usuário:", "Usuario:", "Atendente:", "Assistente:"):
         if s.startswith(pref):
             s = s[len(pref):].lstrip()
     return s.strip()
 
-# Se LLM_BASE_URL estiver definido, ele prevalece
+# Se LLM_BASE_URL estiver definido, ele prevalece (use isso no CPU para depurar mais fácil).
+# Default mantido: http://172.31.18.20:8000
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://172.31.18.20:8000").rstrip("/")
-# Mantém compat com funções antigas (health/infer_llm) que usam BASE/ROUTE
-HOST = os.getenv("LLM_HOST", "172.31.18.20")   # PRIVADO (produção)
+
+# Legado (mantido por compat/variáveis, mas NÃO usado para enviar): HOST/PORT/BASE
+HOST = os.getenv("LLM_HOST", "172.31.18.20")
 PORT = os.getenv("LLM_PORT", "8000")
 ROUTE = os.getenv("LLM_ROUTE", "/infer")
 BASE = os.getenv("LLM_BASE_URL", f"http://{HOST}:{PORT}")
-OLLAMA_API_URL = f"{BASE}{ROUTE}"
+
+# Caminho único de envio (evita drift): sempre LLM_BASE_URL + ROUTE
+OLLAMA_API_URL = f"{LLM_BASE_URL}{ROUTE}"
 
 # Sessão com keep-alive
 SESSION = requests.Session()
@@ -49,7 +53,8 @@ SESSION.headers.update({"Content-Type": "application/json"})
 
 def health(timeout: tuple[int, int] = (2, 5)) -> Dict[str, Any]:
     """Ping simples do servidor (espera /health; se não existir, retorna ok pelo status)."""
-    url = f"{BASE}/health"
+    # Usa a mesma base do envio para evitar divergência.
+    url = f"{LLM_BASE_URL}/health"
     try:
         r = SESSION.get(url, timeout=timeout)
         if r.ok:
@@ -75,7 +80,7 @@ def infer_llm(
     payload: Dict[str, Any] = {
         "prompt": prompt,
         "system": system,
-        # Compatível com llm_server.py: envia max_new_tokens (e mantém max_tokens, não atrapalha)
+        # Compatível com llm_server.py: envia max_new_tokens (e mantém max_tokens)
         "max_new_tokens": max_new_tokens if max_new_tokens is not None else max_tokens,
         "max_tokens": max_tokens,
         "temperature": temperature,
@@ -83,23 +88,25 @@ def infer_llm(
     if extra:
         payload.update(extra)
 
+    # Caminho único de envio; logs temporários pós-sucesso
+    url = OLLAMA_API_URL
     try:
-        r = SESSION.post(OLLAMA_API_URL, json=payload, timeout=(timeout_connect, timeout_read))
+        r = requests.post(url, json=payload, timeout=(timeout_connect, timeout_read))
         r.raise_for_status()
+        # LOG TEMPORÁRIO: URL e status quando sucesso (para depuração)
+        print(f"[ollama_service] POST {url} -> {r.status_code}")
         return r.json()
     except requests.exceptions.ConnectTimeout as e:
         raise RuntimeError(
-            f"Timeout ao conectar em {OLLAMA_API_URL}. "
-            f"Verifique SG da GPU (porta 8000), HOST={HOST}, se o serviço está em 0.0.0.0:{PORT}."
+            f"Timeout ao conectar em {url}. Verifique SG/serviço e se está em 0.0.0.0."
         ) from e
     except requests.exceptions.ReadTimeout as e:
         raise RuntimeError(
-            f"Conectou mas não respondeu a tempo (read timeout) em {OLLAMA_API_URL}. "
-            f"Verifique logs da LLM/latência."
+            f"Conectou mas não respondeu a tempo (read timeout) em {url}. Verifique logs/latência."
         ) from e
     except requests.exceptions.ConnectionError as e:
         raise RuntimeError(
-            f"Erro de conexão com {OLLAMA_API_URL}. Verifique rota, DNS, serviço e rede."
+            f"Erro de conexão com {url}. Verifique rota, DNS, serviço e rede."
         ) from e
 
 def _strip_code_fences(text: str) -> str:
@@ -151,7 +158,8 @@ def get_llama_response(
     Aumenta max_tokens por padrão (512). Limpa eco do template [INST].
     Ignora silenciosamente parâmetros não usados (temperature/extra) para compatibilidade.
     """
-    url = f"{LLM_BASE_URL}/infer"
+    # Caminho único de envio; usar mesma URL para evitar drift.
+    url = OLLAMA_API_URL
     payload: Dict[str, Any] = {
         "prompt": prompt,
         "max_new_tokens": int(max_tokens),
@@ -165,6 +173,8 @@ def get_llama_response(
     try:
         r = requests.post(url, json=payload, timeout=60)
         r.raise_for_status()
+        # LOG TEMPORÁRIO: URL e status quando sucesso (para depuração)
+        print(f"[ollama_service] POST {url} -> {r.status_code}")
         if r.headers.get("content-type","").lower().startswith("application/json"):
             data = r.json()
             txt = data.get("text") or data.get("response") or data.get("generated_text") or ""

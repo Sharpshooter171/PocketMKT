@@ -143,6 +143,12 @@ def _listar_slots_disponiveis(dias=7, hora_inicio=9, hora_fim=18, duracao_min=60
     return slots
 # ==== FIM HELPERS AGENDA ====
 
+# Fallback neutro para evitar NameError em cenários ADVx até a regra real ser reintroduzida
+def _is_alterar_cancelar_agenda(texto: str) -> bool:
+    t = (texto or "").strip().lower()
+    gatilhos = ("cancelar", "remarcar", "alterar", "mudar", "adiar")
+    return any(g in t for g in gatilhos)
+
 # ==== HUMANIZAÇÃO – TONS E FECHOS ====
 def _humanize_during(texto_base):
     # garante linguagem clara + convite à continuidade
@@ -189,6 +195,26 @@ def _humanize_post(texto, fluxo):
         return texto
     return f"{texto}\n{rodape}"
 # ==== FIM HUMANIZAÇÃO ====
+
+# ==== LIMPEZA DE ECO MISTRAL (servidor) ====
+def _clean_mistral_echo(texto: str) -> str:
+    """
+    Remove prefixos de papéis (p.ex.: 'Atendente:', 'Usuário:', 'Assistant:') no início das linhas.
+    Mantém compatibilidade com respostas não-LLM.
+    """
+    try:
+        if not texto or not isinstance(texto, str):
+            return texto
+        import re
+        roles = ("assistant", "atendente", "usuario", "usuário", "user", "cliente", "system", "sistema", "bot", "agente")
+        pat = re.compile(rf"^\s*(?:{'|'.join(roles)})\s*[:\-–]\s*", re.IGNORECASE)
+        cleaned_lines = [pat.sub("", ln).strip() for ln in texto.strip().splitlines()]
+        cleaned = "\n".join(cleaned_lines).strip()
+        cleaned = re.sub(r"^#+\s*(assistant|atendente|usuario|usuário|user|cliente)\s*[:\-–]\s*", "", cleaned, flags=re.IGNORECASE|re.MULTILINE).strip()
+        return cleaned
+    except Exception:
+        return texto
+# ==== FIM LIMPEZA ====
 
 # Quais intents o assistente pode executar sem preview/confirm?
 AUTO_EXEC_POLICY = {
@@ -1279,20 +1305,37 @@ def processar_atendimento():
     """Endpoint principal unificado: detecta fluxos básicos de cliente e todos de advogado.
     Sempre retorna HTTP 200 com contrato mínimo (resposta, fluxo, numero, tipo_usuario, ids...)."""
     try:
+        # Observabilidade: req_id + helper de log estruturado (PT-BR)
+        import time as _time
+        req_id = _time.time_ns()
+        t0 = _time.time()
+        def _log(stage, **extra):
+            try:
+                logging.info(json.dumps({"stage": stage, "req_id": req_id, **extra}, ensure_ascii=False))
+            except Exception:
+                logging.info(f"[req {req_id}] {stage} {extra}")
+
         data = request.get_json() or {}
+        mensagem = (data.get('mensagem') or '').strip()
+        numero = data.get('numero')
+        tipo_usuario = (data.get('tipo_usuario') or '').lower()
+
+        # Log de entrada (não altera contrato)
+        _log("in", numero=numero, tipo_usuario=tipo_usuario, len_msg=len(mensagem), healthcheck=bool(data.get("healthcheck")))
 
         # Healthcheck curto-circuito (sem exigir OAuth ou outros requisitos)
         if data.get("healthcheck"):
-            return jsonify({
+            payload = {
                 "resposta": "pong",
                 "fluxo": "healthcheck",
                 "numero": data.get("numero"),
                 "tipo_usuario": (data.get("tipo_usuario") or "").lower()
-            }), 200
+            }
+            # Sanitização anti-eco LLM (inócua aqui, preserva contrato)
+            payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+            _log("return", fluxo=payload["fluxo"], intent_source="rule", dur_ms=int((_time.time()-t0)*1000))
+            return jsonify(payload), 200
 
-        mensagem = (data.get('mensagem') or '').strip()
-        numero = data.get('numero')
-        tipo_usuario = (data.get('tipo_usuario') or '').lower()
         # Camada de acolhimento (pré)
         pre_msg = _humanize_pre(mensagem, tipo_usuario)
 
@@ -1323,9 +1366,11 @@ def processar_atendimento():
                 "intent_source": "rule",
                 "is_saudacao": True
             }
-            # Rede de segurança: garante tom educado + próximos passos se não for saudação
             if not payload.get("is_saudacao"):
                 payload["resposta"] = _humanize_post(_humanize_during(payload["resposta"]), payload.get("fluxo"))
+            # Sanitização anti-eco LLM no retorno
+            payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+            _log("return", fluxo=payload["fluxo"], intent_source=payload["intent_source"], dur_ms=int((_time.time()-t0)*1000))
             return jsonify(payload), 200
 
         fluxo_detectado = None
@@ -1337,18 +1382,23 @@ def processar_atendimento():
         if tipo_usuario == 'advogado':
             svc = get_google_sheets_service()
             oauth_ok = svc is not None
+            _log("oauth", tipo_usuario="advogado", ok=bool(oauth_ok))  # Log de OAuth (chamada externa)
 
             # Trata confirma/cancela de propostas pendentes (preview já enviado antes)
             conf = _check_confirm(numero, (mensagem or '').lower())
             if conf:
                 fluxo_detectado = "aprovar_agendamento_advogado"
-                # Se a execução confirmou agenda, preserve mensagem canônica sem humanização/footer
                 if _is_canonical_agenda_response(conf):
                     payload = {"resposta": conf, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "rule"}
+                    # Sanitização anti-eco LLM no retorno (mensagens canônicas permanecem iguais)
+                    payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+                    _log("return", fluxo=payload["fluxo"], intent_source=payload["intent_source"], dur_ms=int((_time.time()-t0)*1000))
                     return jsonify(payload), 200
-                # ...fallback para mensagens não canônicas (mantém comportamento atual)...
                 resp = _humanize_post(_humanize_during(conf), fluxo_detectado) + _footer_advogado()
                 payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "rule"}
+                # Sanitização anti-eco LLM no retorno
+                payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+                _log("return", fluxo=payload["fluxo"], intent_source=payload["intent_source"], dur_ms=int((_time.time()-t0)*1000))
                 return jsonify(payload), 200
 
             # Roteamento explícito: alterar/cancelar/remarcar/adiar agenda
@@ -1359,43 +1409,51 @@ def processar_atendimento():
                     resposta_texto = MSG_AGENDA_RECUSADO
                 else:
                     resposta_texto = MSG_AGENDA_SUGERIR
-                # Resposta canônica (sem humanização/footer)
                 payload = {"resposta": resposta_texto, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "rule"}
+                # Sanitização anti-eco LLM no retorno
+                payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+                _log("return", fluxo=payload["fluxo"], intent_source=payload["intent_source"], dur_ms=int((_time.time()-t0)*1000))
                 return jsonify(payload), 200
 
             # 0) NLU: o advogado está aprovando/recusando/sugerindo horário?
             decisao = _interpretar_decisao_advogado(mensagem)
             if decisao.get("acao") in {"aprovar","recusar","sugerir"}:
-                # Buscar pedido pendente desse número
                 try:
+                    # Buscar pedido pendente desse número
                     nome_escr = f"Escritório {(data.get('escritorio_id') or 'Geral').title()}"
                     arq = f"sheet_id_{nome_escr.replace(' ','_').lower()}.txt"
                     sheet_id = None
                     if os.path.exists(arq):
                         with open(arq,'r') as f: sheet_id = f.read().strip()
                     if not (svc and sheet_id):
-                        # Sem CRM: ainda assim responde canônico
                         if decisao["acao"] == "recusar":
                             fluxo_detectado = "aprovar_agendamento_advogado"
                             payload = {"resposta": MSG_AGENDA_RECUSADO, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                            # Sanitização anti-eco LLM no retorno
+                            payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+                            _log("return", fluxo=payload["fluxo"], intent_source=payload["intent_source"], dur_ms=int((_time.time()-t0)*1000))
                             return jsonify(payload), 200
 
                     row_index, label, inicio_iso_salvo, fim_iso_salvo = _buscar_pedido_agendamento_pendente(svc, sheet_id, numero)
                     if not row_index:
-                        # Nenhum pedido pendente para esse cliente (mantém mensagem atual)
                         resposta_texto = "Não encontrei pedido de agendamento pendente para este cliente. Posso registrar um novo pedido?"
                         fluxo_detectado = "aprovar_agendamento_advogado"
                         resp = _humanize_post(_humanize_during(resposta_texto), fluxo_detectado) + _footer_advogado()
                         payload = {"resposta": resp, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                        # Sanitização anti-eco LLM no retorno
+                        payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+                        _log("return", fluxo=payload["fluxo"], intent_source=payload["intent_source"], dur_ms=int((_time.time()-t0)*1000))
                         return jsonify(payload), 200
 
                     acao = decisao["acao"]
 
-                    # Se o advogado recusou -> mensagem canônica
                     if acao == "recusar":
                         _atualizar_status_tarefa(svc, sheet_id, row_index, "Recusado")
                         fluxo_detectado = "aprovar_agendamento_advogado"
                         payload = {"resposta": MSG_AGENDA_RECUSADO, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                        # Sanitização anti-eco LLM no retorno
+                        payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+                        _log("return", fluxo=payload["fluxo"], intent_source=payload["intent_source"], dur_ms=int((_time.time()-t0)*1000))
                         return jsonify(payload), 200
 
                     # Preparar horários (com defaults) para aprovar/sugerir
@@ -1412,23 +1470,30 @@ def processar_atendimento():
                         _ = _exec_criar_evento_aprovado(numero, inicio_iso, fim_iso, label, data)
                         fluxo_detectado = "aprovar_agendamento_advogado"
                         payload = {"resposta": MSG_AGENDA_APROVADO, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                        # Sanitização anti-eco LLM no retorno
+                        payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+                        _log("return", fluxo=payload["fluxo"], intent_source=payload["intent_source"], dur_ms=int((_time.time()-t0)*1000))
                         return jsonify(payload), 200
 
                     if acao == "sugerir":
-                        # Apenas registra orientação de sugerir novos horários (sem prévia/execução)
                         fluxo_detectado = "aprovar_agendamento_advogado"
                         payload = {"resposta": MSG_AGENDA_SUGERIR, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                        # Sanitização anti-eco LLM no retorno
+                        payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+                        _log("return", fluxo=payload["fluxo"], intent_source=payload["intent_source"], dur_ms=int((_time.time()-t0)*1000))
                         return jsonify(payload), 200
 
                     # Fallback: criar PRÉVIA (pendência) e responder canônico de prévia
                     def _exec_adv_criar():
                         return _exec_criar_evento_aprovado(numero, inicio_iso, fim_iso, label, data)
-                    _ = _propose(numero, MSG_AGENDA_PREVIEW, _exec_adv_criar)  # mantém pendência, ignora texto retornado
+                    _ = _propose(numero, MSG_AGENDA_PREVIEW, _exec_adv_criar)
                     fluxo_detectado = "aprovar_agendamento_advogado"
                     payload = {"resposta": MSG_AGENDA_PREVIEW, "fluxo": fluxo_detectado, "numero": numero, "tipo_usuario": tipo_usuario, "intent_source": "llm"}
+                    # Sanitização anti-eco LLM no retorno
+                    payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+                    _log("return", fluxo=payload["fluxo"], intent_source=payload["intent_source"], dur_ms=int((_time.time()-t0)*1000))
                     return jsonify(payload), 200
                 except Exception:
-                    # se algo falhar, cai pro fluxo normal do advogado
                     pass
 
             try:
@@ -1443,8 +1508,8 @@ def processar_atendimento():
             # ✅ Respostas com palavras‑chave para os fluxos de advogado
             if fluxo_detectado == 'onboarding':
                 preview = "Vou preparar seu **CRM** (abas: Clientes, Casos, Tarefas, Financeiro, Documentos, Parceiros). Confirmar?"
-                # Polimento LLM
-                preview = _llm_reply("onboarding", mensagem) or preview
+                preview = _llm_reply("onboarding", mensagem) or preview  # LLM polindo preview (ambiguidade)
+                _log("llm_preview", intent="onboarding", used=bool(preview))
 
                 def _exec_onboarding():
                     try:
@@ -1475,6 +1540,7 @@ def processar_atendimento():
             elif fluxo_detectado in ('peticao_aprovada', 'aprovacao_peticao'):
                 preview = "📄 **Petição** aprovada. Posso criar uma **tarefa** 'Protocolar petição' para hoje no CRM. Confirmar?"
                 preview = _llm_reply("aprovacao_peticao", mensagem) or preview
+                _log("llm_preview", intent="aprovacao_peticao", used=bool(preview))
 
                 def _exec_tarefa_pet():
                     try:
@@ -1501,6 +1567,7 @@ def processar_atendimento():
             elif fluxo_detectado in ('lembrete_prazo', 'alerta_prazo'):
                 preview = "⏰ Posso **criar um lembrete** no CRM para o prazo/audiência indicado. Confirmar?"
                 preview = _llm_reply("alerta_prazo", mensagem) or preview
+                _log("llm_preview", intent="alerta_prazo", used=bool(preview))
 
                 def _exec_lembrete():
                     try:
@@ -1527,6 +1594,7 @@ def processar_atendimento():
             elif fluxo_detectado in ('documento_juridico', 'revisao_documento'):
                 preview = "🧩 Posso **buscar ou gerar** o modelo solicitado e salvar em **Modelos de Documentos** no Drive. Confirmar?"
                 preview = _llm_reply("documento_juridico", mensagem) or preview
+                _log("llm_preview", intent="documento_juridico", used=bool(preview))
 
                 def _exec_modelo():
                     try:
@@ -1599,9 +1667,11 @@ def processar_atendimento():
             # ✅ Modo simulado quando faltar OAuth (sem redirect)
             svc = get_google_sheets_service()
             oauth_ok = svc is not None
+            _log("oauth", tipo_usuario="cliente", ok=bool(oauth_ok))  # Log de OAuth (chamada externa)
 
             # 1) DETECÇÃO (híbrido: NLU → regex score → LLM few-shot)
             intent = _detect_with_nlu_llm(mensagem)
+            _log("intent_detected", intent=intent)  # Log da decisão de intent
 
             # Normalização de rótulo legado
             if intent == "envio_documento_cliente":
@@ -1710,6 +1780,9 @@ def processar_atendimento():
                                 except Exception:
                                     return "✅ Tarefa registrada."
                             preview = f"Não encontrei **{cnj}** no CRM. Vou abrir uma **tarefa** para o advogado te retornar."
+                            # Polimento via LLM para visualizar LLM em testes (ambiguidade)
+                            preview = _llm_reply("consulta_andamento_cliente", mensagem) or preview
+                            _log("llm_preview", intent="consulta_andamento_cliente", used=bool(preview))
                             resposta_texto = _auto_or_propose("consulta_andamento_cliente_open_task", numero, preview, _exec_tarefa)
                     else:
                         # 4) Pede dados mínimos
@@ -1724,7 +1797,6 @@ def processar_atendimento():
                 pass
 
             elif intent == "enviar_documento_cliente":
-                # 1) Se usuário respondeu "confirmar/cancelar", trata
                 conf = _check_confirm(numero, mensagem.lower())
                 if conf:
                     fluxo_detectado = "enviar_documento_cliente"
@@ -1733,8 +1805,10 @@ def processar_atendimento():
                     else:
                         resposta_texto = conf
                 else:
-                    # Preview direto (auto-exec conforme policy)
                     preview = "Vou **salvar seu documento** no Drive e **registrar no CRM** (pasta do cliente)."
+                    # Polimento via LLM para visualizar LLM em testes (ambiguidade)
+                    preview = _llm_reply("enviar_documento_cliente", mensagem) or preview
+                    _log("llm_preview", intent="enviar_documento_cliente", used=bool(preview))
 
                     def _exec_upload():
                         if not oauth_ok:
@@ -1753,6 +1827,7 @@ def processar_atendimento():
                             return "✅ Documento salvo (simulado)."
                         conteudo = (mensagem or "Documento enviado pelo cliente").encode("utf-8")
                         file_id, file_link = upload_drive_bytes("documento_cliente.txt", conteudo, pasta_id=None, mime_type="text/plain")
+                        _log("google_drive_upload", ok=bool(file_id))  # Log da chamada externa
                         if file_id:
                             ids["file_id"] = file_id
                             # Refletir no CRM (aba Documentos)
@@ -1802,6 +1877,10 @@ def processar_atendimento():
                 novo_email = (infos.get("emails") or [""])[0]
 
                 preview = "Vou atualizar seu cadastro no CRM."
+                # Polimento via LLM (preview confirmar)
+                preview = _llm_reply("atualizar_cadastro_cliente", mensagem) or preview
+                _log("llm_preview", intent="atualizar_cadastro_cliente", used=bool(preview))
+
                 def _exec_update():
                     svc = get_google_sheets_service()
                     if not svc: return "✅ Cadastro atualizado (simulado)."
@@ -1814,14 +1893,20 @@ def processar_atendimento():
                             spreadsheetId=sheet_id, range="Clientes!A1", valueInputOption="RAW",
                             body={"values":[[datetime.now().strftime("%d/%m/%Y %H:%M"), numero, novo_tel, novo_email, "Atualização"]]}
                         ).execute()
+                        _log("google_sheets_append", aba="Clientes", ok=True)  # Log da chamada externa
                         return "✅ Cadastro atualizado no CRM."
                     except Exception:
+                        _log("google_sheets_append", aba="Clientes", ok=False)
                         return "✅ Cadastro atualizado."
                 resposta_texto = _auto_or_propose("atualizar_cadastro_cliente", numero, preview, _exec_update)
                 fluxo_detectado = "atualizar_cadastro_cliente"
 
             elif intent == "followup_cliente":
                 preview = "Vou enviar um lembrete amigável ao cliente."
+                # Polimento via LLM (preview confirmar)
+                preview = _llm_reply("system", mensagem) or preview
+                _log("llm_preview", intent="followup_cliente", used=bool(preview))
+
                 def _exec_follow():
                     svc = get_google_sheets_service()
                     if not svc:
@@ -1853,8 +1938,10 @@ def processar_atendimento():
                                 "Enviado"
                             ]]}
                         ).execute()
+                        _log("google_sheets_append", aba="Tarefas", ok=True)  # Log da chamada externa
                         return "✅ Lembrete enviado."
                     except Exception:
+                        _log("google_sheets_append", aba="Tarefas", ok=False)
                         return "✅ Lembrete enviado."
                 resposta_texto = _auto_or_propose("followup_cliente", numero, preview, _exec_follow)
                 fluxo_detectado = "followup_cliente"
@@ -1882,13 +1969,8 @@ def processar_atendimento():
                 except Exception:
                     pass
 
-        else:
-            fluxo_detectado = 'tipo_usuario_desconhecido'
-            resposta_texto = 'Informe tipo_usuario = cliente ou advogado.'
-
         # Armazenar no contexto da requisição e responder
         g.fluxo_detectado = fluxo_detectado
-    
         payload = {
             "resposta": resposta_texto,
             "fluxo": fluxo_detectado,
@@ -1898,9 +1980,21 @@ def processar_atendimento():
         }
         if ids:
             payload.update({k: v for k, v in ids.items() if v})
+
+        # Sanitização anti-eco LLM no retorno final (caminho comum)
+        payload["resposta"] = _clean_mistral_echo(payload["resposta"])
+
+        # Log final da decisão e tempo total
+        _log("return", fluxo=payload["fluxo"], intent_source=payload.get("intent_source"), dur_ms=int((_time.time()-t0)*1000))
         return jsonify(payload), 200
     except Exception as e:
         g.fluxo_detectado = 'erro_interno'
+        # Log de erro com tempo total
+        try:
+            import time as _time
+            logging.error(json.dumps({"stage":"error","req_id":req_id,"erro":str(e),"dur_ms":int((_time.time()-t0)*1000)}, ensure_ascii=False))
+        except Exception:
+            logging.error(f"[req {locals().get('req_id','?')}] error {e}")
         return jsonify({
             "resposta": "Falha interna.",
             "fluxo": 'erro_interno',
