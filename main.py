@@ -6,6 +6,25 @@ import time
 from pathlib import Path
 from flask import Flask
 
+# [MVP] Limpeza global de resposta visível ao usuário
+def _limpar_resposta(texto: str) -> str:
+    if not texto:
+        return ""
+    s = str(texto).replace("<s>", "").replace("</s>", "")
+    # remove marcadores internos que possam vazar
+    lixo = ("[FIM]", "[RETIRAR", "[/Usuário", "[/Usuario", "[/Atendente", "[/Assistente", "[/Você", "[/Voce")
+    for t in lixo:
+        s = s.replace(t, "")
+    # remove prefixos de papel no início de cada linha
+    linhas = []
+    ban = ("Usuário:", "Usuario:", "Atendente:", "Assistente:")
+    for ln in s.splitlines():
+        ln_strip = ln.lstrip()
+        if any(ln_strip.startswith(b) for b in ban):
+            ln = ln_strip.split(":", 1)[-1].lstrip()
+        linhas.append(ln)
+    return "\n".join(linhas).strip()
+
 # Blueprints principais (sem prefixos)
 from app.routes.atendimento import atendimento_bp
 try:
@@ -70,6 +89,25 @@ def create_app():
     """Factory para criar a aplicação Flask (permite testes e múltiplas instâncias)."""
     app = Flask(__name__)
 
+    # Hook de sanitização de respostas JSON (campo 'resposta')
+    from flask import request, jsonify  # noqa: F401 (request/jsonify podem ser usados futuramente)
+    import json
+
+    @app.after_request
+    def _sanitizar_resposta(response):  # type: ignore
+        try:
+            if response.content_type and "application/json" in response.content_type.lower():
+                data = response.get_data(as_text=True) or ""
+                if data.startswith("{") or data.startswith("["):
+                    obj = json.loads(data)
+                    if isinstance(obj, dict) and "resposta" in obj:
+                        obj["resposta"] = _limpar_resposta(obj["resposta"])
+                        response.set_data(json.dumps(obj, ensure_ascii=False))
+        except Exception:
+            # Nunca quebrar a resposta original por erro de limpeza
+            pass
+        return response
+
     # Secret por ambiente (segurança)
     app.secret_key = os.getenv("FLASK_SECRET_KEY", "mude-para-uma-chave-segura")
 
@@ -94,6 +132,23 @@ def create_app():
     @app.route("/")
     def home():
         return "Servidor Flask do PocketMKT está rodando!"
+
+    @app.route("/status", methods=["GET"])
+    def status():
+        from flask import jsonify
+        info = {
+            "flask_backend": "OK",
+            "google_oauth": bool(google_bp),
+            "endpoints": ["/processar_atendimento", "/authorize", "/oauth2callback", "/status"],
+        }
+        # [MVP] verificação simples da LLM
+        try:
+            from app.ollama_service import get_llama_response
+            pong = get_llama_response("Diga 'ok' apenas.", max_tokens=4)
+            info["llm_online"] = (pong.lower().find("ok") != -1) or bool(pong)
+        except Exception:
+            info["llm_online"] = False
+        return jsonify(info)
 
     return app
 

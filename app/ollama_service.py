@@ -15,6 +15,9 @@ import requests
 from typing import Any, Dict, Optional
 import json
 import re  # novo
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Helper: limpa eco do template Mistral Instruct na saída
 def _clean_mistral_echo(txt: str) -> str:
@@ -153,39 +156,25 @@ def get_llama_response(
     temperature: float = 0.2,
     extra: Optional[Dict[str, Any]] = None
 ) -> str:
+    """Envia prompt para a GPU e retorna texto limpo para o app.
+    Importante: não vazar erros internos ao usuário final.
+    Mantida assinatura antiga para compatibilidade (system, temperature, extra ignorados se não usados).
     """
-    Chama a GPU em /infer. Envie 'prompt' já montado por montar_prompt_instruct().
-    Aumenta max_tokens por padrão (512). Limpa eco do template [INST].
-    Ignora silenciosamente parâmetros não usados (temperature/extra) para compatibilidade.
-    """
-    # Caminho único de envio; usar mesma URL para evitar drift.
-    url = OLLAMA_API_URL
-    payload: Dict[str, Any] = {
-        "prompt": prompt,
-        "max_new_tokens": int(max_tokens),
-        "system": system or ""
-    }
-    # Permite providers que aceitam temperature/extra sem quebrar
-    if temperature is not None:
-        payload["temperature"] = float(temperature)
-    if extra and isinstance(extra, dict):
-        payload.update(extra)
     try:
-        r = requests.post(url, json=payload, timeout=60)
-        r.raise_for_status()
-        # LOG TEMPORÁRIO: URL e status quando sucesso (para depuração)
-        print(f"[ollama_service] POST {url} -> {r.status_code}")
-        if r.headers.get("content-type","").lower().startswith("application/json"):
-            data = r.json()
-            txt = data.get("text") or data.get("response") or data.get("generated_text") or ""
-        else:
-            txt = r.text or ""
-        cleaned = _clean_mistral_echo(txt)
-        # fallback mínimo ao remover cercas se houver
-        cleaned = _strip_code_fences(cleaned)
-        return cleaned.strip()
-    except Exception as e:
-        return f"(Falha ao consultar LLM: {e})"
+        payload = {
+            "prompt": prompt,
+            "max_new_tokens": int(max_tokens),
+        }
+        # Reaproveita função já existente (infer_llm)
+        resp = infer_llm(**payload)
+        texto = (resp.get("response") or resp.get("text") or resp.get("generated_text") or "").strip()
+        # preserva limpeza anterior
+        texto = _clean_mistral_echo(texto)
+        texto = _strip_code_fences(texto)
+        return texto.strip()
+    except Exception:
+        logger.exception("Falha ao consultar LLM")
+        return "No momento não consegui consultar o sistema. Registrei seu pedido e o responsável dará sequência."
 
 def classify_intent_llm(texto: str) -> str:
     """
